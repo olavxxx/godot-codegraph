@@ -1,0 +1,22 @@
+[gd_scene load_steps=5 format=3 uid="uid://cfixplayer1"]
+
+[ext_resource type="Script" path="res://scripts/Player.gd" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://cfixbullet1" path="res://scenes/Bullet.tscn" id="2_bullet"]
+[ext_resource type="Script" path="res://scripts/Hurtbox.gd" id="3_hurt"]
+
+[node name="Player" type="Node2D"]
+script = ExtResource("1_player")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+script = ExtResource("3_hurt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+
+[node name="Bullet" parent="." instance=ExtResource("2_bullet")]
+velocity = 30.0
+
+[node name="Timer" type="Timer" parent="."]
+wait_time = 2.0
+
+[connection signal="died" from="Hurtbox" to="." method="on_enemy_died"]
+[connection signal="timeout" from="Timer" to="." method="on_enemy_died"]

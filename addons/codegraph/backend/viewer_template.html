@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<title>Shitty City · kodegraf</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{
+    --bg:#070b10; --panel:#0d141d; --panel2:#101a25; --line:#1d2b3a;
+    --ink:#cfe3f5; --dim:#6d8296; --hot:#ffd166; --acc:#4fb3ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font:13px/1.45 ui-monospace,"Cascadia Mono",Consolas,"Segoe UI Mono",monospace}
+  #app{display:grid;grid-template-rows:auto 1fr;height:100%}
+  header{display:flex;gap:10px;align-items:center;padding:9px 12px;background:var(--panel);
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:13px;margin:0 6px 0 0;letter-spacing:.06em;text-transform:uppercase;color:var(--hot)}
+  .tabs,.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:6px;
+    padding:4px 9px;font:inherit;cursor:pointer}
+  button:hover{border-color:var(--acc);color:#fff}
+  button.on{background:#16293c;border-color:var(--acc);color:#fff;box-shadow:0 0 0 1px #4fb3ff33 inset}
+  .chip{opacity:.45;border-radius:20px;padding:3px 9px}
+  .chip.on{opacity:1}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  input[type=search]{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:6px;padding:5px 9px;font:inherit;min-width:230px}
+  #main{display:grid;grid-template-columns:1fr 320px;min-height:0}
+  #stage{position:relative;overflow:hidden;
+    background-image:radial-gradient(circle at 50% 45%,#0e1a26 0%,#070b10 70%)}
+  canvas{display:block;width:100%;height:100%;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px}
+  #tip{position:absolute;pointer-events:none;background:#0b141d;border:1px solid var(--line);
+    border-radius:6px;padding:6px 8px;display:none;max-width:340px;z-index:5;box-shadow:0 8px 24px #0008}
+  #hud{position:absolute;left:10px;bottom:10px;color:var(--dim);background:#070b10cc;
+    border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+  .k{color:var(--hot)} .p{color:var(--dim)}
+  .row{display:flex;gap:6px;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #16222e}
+  .row b{font-weight:600}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin:16px 0 6px}
+  .det .big{font-size:15px;color:#fff;margin-bottom:2px}
+  .det .loc{color:var(--acc);word-break:break-all}
+  .lnk{display:block;padding:3px 6px;border-radius:5px;cursor:pointer;text-decoration:none;color:var(--ink)}
+  .lnk:hover{background:#16293c}
+  .muted{color:var(--dim)}
+  kbd{background:#16293c;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
+  #legend{display:flex;flex-wrap:wrap;gap:5px}
+  #legend span{font-size:11px;color:var(--dim)}
+  footer{padding:8px 0 0;color:var(--dim);font-size:11px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Kodegraf</h1>
+    <div class="tabs" id="views"></div>
+    <input id="q" type="search" placeholder="søk node  ( / )">
+    <div class="chips" id="kindChips"></div>
+    <div class="chips" id="edgeChips"></div>
+    <div class="tabs">
+      <button id="btnPhysics" class="on">fysikk</button>
+      <button id="btnLabels" class="on">etiketter</button>
+      <button id="btnArrows" class="on">piler</button>
+      <button id="btnFit">tilpass</button>
+      <button id="btnFreeze">frys</button>
+      <button id="btnPng">eksporter png</button>
+    </div>
+  </header>
+  <div id="main">
+    <div id="stage">
+      <canvas id="c"></canvas>
+      <div id="tip"></div>
+      <div id="hud"></div>
+    </div>
+    <aside id="side"></aside>
+  </div>
+</div>
+<script type="application/json" id="data">__DATA_JSON__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const byId = new Map(D.nodes.map(n=>[n.id,n]));
+const N = D.nodes, L = D.links;
+let deg = {}; L.forEach(l=>{deg[l.s]=(deg[l.s]||0)+l.w; deg[l.t]=(deg[l.t]||0)+l.w;});
+
+// --- tilstand -------------------------------------------------------------
+let view = D.view, showKinds = new Set(), showEdges = new Set(),
+    sel = null, hover = null, alpha = 1, physics = true, labels = true, arrows = true,
+    q = '', W = 0, H = 0, dpr = Math.min(2, devicePixelRatio||1);
+const cam = {x:0, y:0, k:1};
+
+Object.keys(D.colors).forEach(k=>{ if(N.some(n=>n.kind===k)) showKinds.add(k); });
+Object.keys(D.edge_colors).forEach(k=>{ if(L.some(l=>l.k===k)) showEdges.add(k); });
+
+// node pos + radius
+N.forEach((n,i)=>{
+  const a = i*2.39996, r = 20*Math.sqrt(i+1)+24;   // fyllotaks: jamn startfordeling
+  n.x = Math.cos(a)*r; n.y = Math.sin(a)*r; n.vx=0; n.vy=0;
+  n.ndeg = deg[n.id]||1;
+  n.r = Math.min(22, 3 + Math.sqrt(n.ndeg)*1.5);
+  n.fixed = n.kind==='autoload';
+  if(n.fixed) n.r += 4;
+});
+
+const adjOut = new Map(), adjIn = new Map();
+L.forEach(l=>{
+  (adjOut.get(l.s)||adjOut.set(l.s,[]).get(l.s)).push(l);
+  (adjIn.get(l.t)||adjIn.set(l.t,[]).get(l.t)).push(l);
+});
+
+// --- canvas --------------------------------------------------------------
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+function resize(){
+  const b = cv.getBoundingClientRect(); W = b.width; H = b.height;
+  cv.width = W*dpr; cv.height = H*dpr;
+}
+new ResizeObserver(resize).observe(cv); resize();
+
+function visible(n){ return showKinds.has(n.kind) && (!q || n.name.toLowerCase().includes(q)); }
+function edgeVisible(l){
+  return showEdges.has(l.k) && visible(byId.get(l.s)) && visible(byId.get(l.t));
+}
+
+// --- fysikk: fråstøyting via romleg hash + fjører, med makskrefter -------
+function tick(){
+  if(!physics || alpha < 0.003) return;
+  const cell = 90, grid = new Map();
+  const act = N.filter(visible);
+  for(const n of act){
+    const gx = (n.x/cell)|0, gy = (n.y/cell)|0, key = gx+','+gy;
+    (grid.get(key)||grid.set(key,[]).get(key)).push(n);
+  }
+  for(const n of act){
+    const gx = (n.x/cell)|0, gy = (n.y/cell)|0;
+    let fx=0, fy=0;
+    for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++){
+      const arr = grid.get((gx+i)+','+(gy+j)); if(!arr) continue;
+      for(const m of arr){
+        if(m===n) continue;
+        let dx=n.x-m.x, dy=n.y-m.y, d2=dx*dx+dy*dy;
+        if(d2<1){ dx=(Math.random()-.5); dy=(Math.random()-.5); d2=0.5; }
+        const f = Math.min(28, 2400/(d2+90)), inv = 1/Math.sqrt(d2);
+        fx += dx*inv*f; fy += dy*inv*f;
+      }
+    }
+    const fr = Math.hypot(fx,fy); if(fr>120){ fx*=120/fr; fy*=120/fr; }
+    fx += -n.x*0.012; fy += -n.y*0.012;
+    n.vx = (n.vx+fx*alpha)*0.85; n.vy = (n.vy+fy*alpha)*0.85;
+  }
+  for(const l of L){
+    if(!edgeVisible(l)) continue;
+    const a = byId.get(l.s), b = byId.get(l.t); if(!a || !b) continue;
+    let dx=b.x-a.x, dy=b.y-a.y, d=Math.sqrt(dx*dx+dy*dy)||1;
+    const da=deg[a.id]||1, db=deg[b.id]||1;
+    const rest = 60 + 70/Math.sqrt(1+da) + 70/Math.sqrt(1+db);
+    const k = 0.02/(1+Math.log(1+Math.min(da,db)));
+    const f = (d-rest)*k*alpha, ux=dx/d, uy=dy/d;
+    a.vx += ux*f; a.vy += uy*f; b.vx -= ux*f; b.vy -= uy*f;
+  }
+  for(const n of act){
+    if(n===dragNode || n.fixed) continue;
+    const sp=Math.hypot(n.vx,n.vy); if(sp>14){ n.vx*=14/sp; n.vy*=14/sp; }
+    n.x += n.vx; n.y += n.vy;
+    const r=Math.hypot(n.x,n.y);
+    if(r>2600){ n.x*=2600/r; n.y*=2600/r; }
+    if(!isFinite(n.x)||!isFinite(n.y)){ n.x=0; n.y=0; n.vx=n.vy=0; }
+  }
+  alpha *= 0.996;
+}
+
+function draw(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(W/2+cam.x, H/2+cam.y); ctx.scale(cam.k, cam.k);
+
+  const nb = sel ? egoSet(sel, 1) : null;
+  // kanter
+  ctx.lineWidth = 1;
+  for(const l of L){
+    if(!edgeVisible(l)) continue;
+    const a=byId.get(l.s), b=byId.get(l.t);
+    const hot = nb && (l.s===sel || l.t===sel);
+    ctx.globalAlpha = nb ? (hot?0.95:0.06) : 0.42;
+    ctx.strokeStyle = l.color;
+    ctx.lineWidth = Math.min(3.2, 0.6+Math.log2(1+(l.w||1)));
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    if(arrows && hot){
+      const ang = Math.atan2(b.y-a.y, b.x-a.x), m = 0.62;
+      const px = a.x+(b.x-a.x)*m, py = a.y+(b.y-a.y)*m, s = 5;
+      ctx.beginPath();
+      ctx.moveTo(px,py);
+      ctx.lineTo(px-Math.cos(ang-0.4)*s, py-Math.sin(ang-0.4)*s);
+      ctx.lineTo(px-Math.cos(ang+0.4)*s, py-Math.sin(ang+0.4)*s);
+      ctx.closePath(); ctx.fillStyle=l.color; ctx.fill();
+    }
+  }
+  // noder
+  for(const n of N){
+    if(!visible(n)) continue;
+    const dim = nb && !nb.has(n.id);
+    ctx.globalAlpha = dim ? 0.12 : 1;
+    if((n===hover || n===sel) ){
+      ctx.shadowColor = n.color; ctx.shadowBlur = 18;
+    } else ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 6.2832);
+    ctx.fillStyle = n.color; ctx.fill();
+    ctx.shadowBlur = 0;
+    if(n.kind==='autoload'){ ctx.lineWidth=2; ctx.strokeStyle='#ffd166'; ctx.stroke(); }
+    if(n===sel){ ctx.lineWidth=2.4; ctx.strokeStyle='#fff'; ctx.stroke(); }
+  }
+  // etiketter
+  ctx.font = '11px ui-monospace,Consolas,monospace';
+  for(const n of N){
+    if(!visible(n) || !labels) continue;
+    const d = deg[n.id]||0;
+    const important = d>6 || n===hover || n===sel || (nb&&nb.has(n.id)) || n.kind==='autoload';
+    if(!important) continue;
+    ctx.globalAlpha = (nb && !nb.has(n.id)) ? 0.15 : 0.92;
+    ctx.fillStyle = n===sel ? '#fff' : '#9fb6c9';
+    ctx.fillText(n.name, n.x+n.r+3, n.y+3);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function egoSet(id, depth){
+  const s = new Set([id]);
+  let front = [id];
+  for(let d=0; d<depth; d++){
+    const nx = [];
+    for(const x of front){
+      for(const l of (adjOut.get(x)||[])){ if(!s.has(l.t)){ s.add(l.t); nx.push(l.t);} }
+      for(const l of (adjIn.get(x)||[])){ if(!s.has(l.s)){ s.add(l.s); nx.push(l.s);} }
+    }
+    front = nx;
+  }
+  return s;
+}
+
+function frame(){ tick(); draw(); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+// --- interaksjon ---------------------------------------------------------
+let dragNode=null, pan=null, moved=false;
+function toWorld(e){
+  const b = cv.getBoundingClientRect();
+  return {x:(e.clientX-b.left-W/2-cam.x)/cam.k, y:(e.clientY-b.top-H/2-cam.y)/cam.k};
+}
+function pick(e){
+  const p = toWorld(e);
+  let best=null, bd=1e9;
+  for(const n of N){
+    if(!visible(n)) continue;
+    const dx=n.x-p.x, dy=n.y-p.y, d=dx*dx+dy*dy;
+    if(d < Math.pow(n.r+4,2) && d<bd){ bd=d; best=n; }
+  }
+  return best;
+}
+cv.addEventListener('mousedown', e=>{
+  const n = pick(e);
+  if(n){ dragNode=n; } else { pan={x:e.clientX-cam.x, y:e.clientY-cam.y}; }
+  moved=false; cv.classList.add('drag');
+});
+addEventListener('mousemove', e=>{
+  if(dragNode){ const p=toWorld(e); dragNode.x=p.x; dragNode.y=p.y; dragNode.vx=dragNode.vy=0; moved=true; alpha=Math.max(alpha,.25); }
+  else if(pan){ cam.x=e.clientX-pan.x; cam.y=e.clientY-pan.y; moved=true; }
+  else { hover = pick(e); showTip(e); }
+});
+addEventListener('mouseup', e=>{
+  cv.classList.remove('drag');
+  if(!moved){ const n=pick(e); sel = (n && n.id!==sel) ? n.id : null; renderSide(); }
+  dragNode=null; pan=null;
+});
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = Math.exp(-e.deltaY*0.0016);
+  cam.k = Math.max(0.12, Math.min(6, cam.k*f));
+}, {passive:false});
+cv.addEventListener('dblclick', e=>{ const n=pick(e); if(n){ sel=n.id; fit(egoSet(n.id,2)); renderSide(); } });
+
+const tip = document.getElementById('tip');
+function showTip(e){
+  if(!hover){ tip.style.display='none'; return; }
+  const n=hover;
+  tip.innerHTML = `<b>${esc(n.name)}</b> <span class="p">[${n.kind}]</span><br>
+    <span class="p">${esc(n.file||'—')}${n.line?':'+n.line:''}</span><br>
+    <span class="p">${deg[n.id]||0} kanter${n.meta?' · '+esc(n.meta):''}</span>`;
+  tip.style.display='block';
+  const b = document.getElementById('stage').getBoundingClientRect();
+  tip.style.left = Math.min(b.width-360, e.clientX-b.left+12)+'px';
+  tip.style.top = (e.clientY-b.top+12)+'px';
+}
+function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// --- sidepanel -----------------------------------------------------------
+const side = document.getElementById('side');
+function renderSide(){
+  if(!sel){ side.innerHTML = overview(); return; }
+  const n = byId.get(sel);
+  const out = (adjOut.get(sel)||[]).slice().sort((a,b)=>b.w-a.w);
+  const inn = (adjIn.get(sel)||[]).slice().sort((a,b)=>b.w-a.w);
+  const links = (arr, dir) => arr.map(l=>{
+    const o = byId.get(dir==='out'?l.t:l.s); if(!o) return '';
+    return `<a class="lnk" data-id="${o.id}"><span class="dot" style="background:${o.color}"></span>
+      ${esc(o.name)} <span class="p">[${o.kind}] · ${l.k}${l.w>1?' ×'+l.w:''}${o.file?' · '+esc(short(o.file)):''}</span></a>`;
+  }).join('') || '<div class="muted">ingen</div>';
+  side.innerHTML = `<div class="det">
+    <div class="big"><span class="dot" style="background:${n.color}"></span>${esc(n.name)}</div>
+    <div class="p">[${n.kind}]${n.meta?' · '+esc(n.meta):''}</div>
+    <div class="loc">${esc(n.file||'')}<span class="p">${n.line?':'+n.line:''}</span></div>
+    ${n.sig?`<div class="p" style="margin-top:6px;word-break:break-all">${esc(n.sig)}</div>`:''}
+    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      <button data-act="focus">fokuser nabolag</button>
+      <button data-act="fit">sentrer</button>
+    </div>
+    <h2>utgåande (${out.length})</h2>${links(out,'out')}
+    <h2>innkomande (${inn.length})</h2>${links(inn,'in')}
+  </div>`;
+  side.querySelectorAll('.lnk').forEach(a=>a.onclick=()=>{ sel=+a.dataset.id; renderSide(); });
+  side.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    if(b.dataset.act==='fit') fit(new Set([sel]));
+    else { fit(egoSet(sel,2)); }
+  });
+}
+function short(f){ return f.length>34 ? '…'+f.slice(-32) : f; }
+function overview(){
+  const counts = {}; N.forEach(n=>counts[n.kind]=(counts[n.kind]||0)+1);
+  const edges = {}; L.forEach(l=>edges[l.k]=(edges[l.k]||0)+l.w);
+  const hubs = N.slice().sort((a,b)=>(deg[b.id]||0)-(deg[a.id]||0)).slice(0,14)
+    .map(n=>`<div class="row"><span><span class="dot" style="background:${n.color}"></span>${esc(n.name)}</span><b>${deg[n.id]||0}</b></div>`)
+    .join('');
+  return `<h2>oversyn</h2>
+    <div class="row"><span>noder</span><b>${N.length}</b></div>
+    <div class="row"><span>kanter</span><b>${L.length}</b></div>
+    <div class="row"><span>visning</span><b>${esc(view)}</b></div>
+    <h2>nodetypar</h2>${Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([k,v])=>
+      `<div class="row"><span><span class="dot" style="background:${D.colors[k]||'#888'}"></span>${k}</span><b>${v}</b></div>`).join('')}
+    <h2>kanttypar</h2>${Object.entries(edges).sort((a,b)=>b[1]-a[1]).map(([k,v])=>
+      `<div class="row"><span><span class="dot" style="background:${D.edge_colors[k]||'#888'}"></span>${k}</span><b>${v}</b></div>`).join('')}
+    <h2>mest kopla (fartsskilt)</h2>${hubs}
+    <footer>Dobbeltklikk ein node = fokuser nabolaget. Dra = flytt. Rull = zoom.<br>
+    Generert av <span class="k">tools/codegraph/graph.py html</span>.</footer>`;
+}
+renderSide();
+
+// --- knott / knappar -----------------------------------------------------
+function fit(ids){
+  const pts = [...ids].map(i=>byId.get(i)).filter(Boolean);
+  if(!pts.length) return;
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  pts.forEach(p=>{x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);});
+  const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  cam.k = Math.max(0.12, Math.min(2.4, Math.min(W/Math.max(120,x1-x0+120), H/Math.max(120,y1-y0+120))));
+  cam.x = -cx*cam.k; cam.y = -cy*cam.k;
+}
+const kindChips = document.getElementById('kindChips');
+Object.keys(D.colors).filter(k=>N.some(n=>n.kind===k)).forEach(k=>{
+  const b = document.createElement('button');
+  b.className='chip on'; b.innerHTML=`<span class="dot" style="background:${D.colors[k]}"></span>${k}`;
+  b.onclick=()=>{ showKinds.has(k)?showKinds.delete(k):showKinds.add(k); b.classList.toggle('on'); };
+  kindChips.appendChild(b);
+});
+const edgeChips = document.getElementById('edgeChips');
+Object.keys(D.edge_colors).filter(k=>L.some(l=>l.k===k)).forEach(k=>{
+  const b = document.createElement('button');
+  b.className='chip on'; b.innerHTML=`<span class="dot" style="background:${D.edge_colors[k]}"></span>${k}`;
+  b.onclick=()=>{ showEdges.has(k)?showEdges.delete(k):showEdges.add(k); b.classList.toggle('on'); };
+  edgeChips.appendChild(b);
+});
+document.getElementById('q').addEventListener('input', e=>{ q = e.target.value.trim().toLowerCase(); });
+const setBtn=(id,on)=>{const b=document.getElementById(id);b.classList.toggle('on',on);};
+document.getElementById('btnPhysics').onclick=e=>{physics=!physics;setBtn('btnPhysics',physics);};
+document.getElementById('btnLabels').onclick=e=>{labels=!labels;setBtn('btnLabels',labels);};
+document.getElementById('btnArrows').onclick=e=>{arrows=!arrows;setBtn('btnArrows',arrows);};
+document.getElementById('btnFit').onclick=()=>fit(new Set(N.filter(visible).map(n=>n.id)));
+document.getElementById('btnFreeze').onclick=()=>{
+  const p = new Set(N.filter(visible).map(n=>n.id));
+  fit(p); N.forEach(n=>{n.vx=n.vy=0;}); alpha=0;
+};
+document.getElementById('btnPng').onclick=()=>{
+  const a=document.createElement('a'); a.download='kodegraf.png';
+  a.href=cv.toDataURL('image/png'); a.click();
+};
+const VIEWS = ['files','signals','ego'];
+const vwrap = document.getElementById('views');
+VIEWS.forEach(v=>{
+  const b=document.createElement('button');
+  b.textContent = v==='files'?'filer':v==='signals'?'signal':'nabolag';
+  b.className = v===view?'on':'';
+  b.onclick=()=>{
+    if(v===view) return;
+    if(v==='ego' && !D.ego){
+      const n = prompt('Vis nabolaget til kva symbol? (navn frå kg find)');
+      if(!n) return;
+      location.href = 'graph_ego.html'; return;
+    }
+    document.querySelectorAll('#views button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); view=v;
+    location.href = 'graph_'+v+'.html';
+  };
+  vwrap.appendChild(b);
+});
+addEventListener('keydown', e=>{
+  if(e.key==='/' && document.activeElement!==document.getElementById('q')){ e.preventDefault(); document.getElementById('q').focus(); }
+  if(e.key==='Escape'){ sel=null; renderSide(); }
+  if(e.key==='l'){ labels=!labels; setBtn('btnLabels',labels); }
+  if(e.key==='f'){ fit(new Set(N.filter(visible).map(n=>n.id))); }
+});
+setInterval(()=>{
+  const v = N.filter(visible).length, e = L.filter(edgeVisible).length;
+  document.getElementById('hud').innerHTML =
+    `<b>${v}</b> noder · <b>${e}</b> kanter · zoom ${(cam.k*100)|0}%${sel?' · vald: <span class="k">'+esc(byId.get(sel).name)+'</span>':''}`;
+}, 250);
+fit(new Set(N.map(n=>n.id)));
+</script>
+</body>
+</html>

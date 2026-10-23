@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://fixtureturretrig"]
+
+[ext_resource type="PackedScene" path="res://scenes/Turret.tscn" id="1_turret"]
+[ext_resource type="Script" path="res://scripts/RpcNet.gd" id="2_net"]
+
+[node name="TurretRig" type="Node2D"]
+script = ExtResource("2_net")
+
+[node name="Hero" parent="." instance=ExtResource("1_turret")]
+
+[node name="Trigger" type="Area2D" parent="."]
+
+# to="Hero" peiker paa en INSTANSIERT node, og on_hit finst berre i BASEklasse
+[connection signal="body_entered" from="Trigger" to="Hero" method="on_hit"]

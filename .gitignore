@@ -1,0 +1,9 @@
+﻿.godot/
+.codegraph/
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+*.tmp
+.DS_Store
+Thumbs.db

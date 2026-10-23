@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://fixtureturret"]
+
+[ext_resource type="Script" path="res://scripts/Turret.gd" id="1_t"]
+
+[node name="Turret" type="Node2D"]
+script = ExtResource("1_t")
+
+[node name="Muzzle" type="Marker2D" parent="."]

@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://cfixbullet1"]
+
+[ext_resource type="Script" path="res://scripts/Bullet.gd" id="1_b"]
+
+[node name="Bullet" type="Area2D"]
+script = ExtResource("1_b")
+
+[node name="Shape" type="CollisionShape2D" parent="."]

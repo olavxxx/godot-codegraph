@@ -1,0 +1,13 @@
+; Miniatyrprosjekt for codegraph selftest. Ikke en del av spillet.
+config_version=5
+
+[application]
+config/name="CodegraphFixtures"
+run/main_scene="res://scenes/Player.tscn"
+
+[autoload]
+Bus="*res://scripts/Bus.gd"
+GameState="*res://scripts/GameState.gd"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
