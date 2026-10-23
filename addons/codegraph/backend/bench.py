@@ -2,8 +2,8 @@
 Dynamically auto-discovers real signals, scripts, callers, scene wires, and autoloads
 from whatever Godot project it is executed in.
 
-Run:    python tools/codegraph/bench.py            (all tasks)
-       python tools/codegraph/bench.py --tasks=4,5
+Run:    python addons/codegraph/backend/bench.py            (all tasks)
+       python addons/codegraph/backend/bench.py --tasks=4,5
 
 Each question is solved via two approaches, measuring time and token footprint:
   GREP : text search across files, plus context an agent must read to answer
