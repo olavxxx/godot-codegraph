@@ -84,7 +84,9 @@ const STRINGS = {
 		"indexing": "Indexing in progress...",
 		"bench_running": "Running real-world benchmark against grep...",
 		"done_ms": "Completed in %d ms (exit %d)",
-		"err_python": "Warning: Python 3 was not found in PATH. Please install Python 3.",
+		"err_python": "Warning: Python 3 was not found in PATH.",
+		"python_install": "Install Python 3.10+ (https://www.python.org/downloads/) and tick \"Add python.exe to PATH\", then restart Godot.",
+		"graph_generating": "Generating interactive graph in a background thread...",
 		"enter_term": "Please enter a search term.",
 		"bench_empty_project": "Project needs at least 2 GDScript files to run a benchmark suite.",
 		"bench_title": "═══ BENCHMARK RESULTS & CHARTS ═══",
@@ -148,7 +150,9 @@ const STRINGS = {
 		"indexing": "Indekserer prosjektet...",
 		"bench_running": "Kjører ytelsestest mot grep...",
 		"done_ms": "Ferdig på %d ms (exit %d)",
-		"err_python": "Advarsel: Python 3 ble ikke funnet i PATH. Vennligst installer Python 3.",
+		"err_python": "Advarsel: Python 3 ble ikke funnet i PATH.",
+		"python_install": "Installer Python 3.10+ (https://www.python.org/downloads/) og huk av for «Add python.exe to PATH», start så Godot på nytt.",
+		"graph_generating": "Genererer interaktiv graf i ein bakgrunnstråd...",
 		"enter_term": "Vennligst oppgi et søkeord.",
 		"bench_empty_project": "Prosjektet må ha minst 2 GDScript-filer for å kjøre en ytelsestest.",
 		"bench_title": "═══ BENCHMARK-RESULTATER & DIAGRAM ═══",
@@ -223,15 +227,19 @@ var last_typed: String = ""
 @onready var tips_label: Label = %TipsLabel
 
 var python_cmd: String = "python"
+var python_ok: bool = false
 var backend_path: String = ""
 var symbol_cache: Array[Dictionary] = []
 var index_thread: Thread = null
 var poll_timer: Timer = null
+var html_thread: Thread = null
+var html_timer: Timer = null
+var html_view_name: String = ""
 
 func _ready() -> void:
 	_load_language_preference()
-	_init_python()
 	_setup_ui()
+	_init_python()
 	_check_indexed_state()
 	_load_existing_bench_chart()
 
@@ -256,6 +264,7 @@ func _load_language_preference() -> void:
 func _toggle_language() -> void:
 	lang = "no" if lang == "en" else "en"
 	var lang_file = "res://.codegraph/lang.txt"
+	DirAccess.make_dir_recursive_absolute("res://.codegraph")
 	var f = FileAccess.open(lang_file, FileAccess.WRITE)
 	if f:
 		f.store_string(lang)
@@ -275,8 +284,19 @@ func _init_python() -> void:
 		var exit_code = OS.execute(candidate, ["--version"], test_out, true)
 		if exit_code == 0:
 			python_cmd = candidate
+			python_ok = true
+			_set_backend_enabled(true)
 			return
-	status_label.text = t("err_python")
+	python_ok = false
+	_set_backend_enabled(false)
+	status_label.text = t("err_python") + "  " + t("python_install")
+
+# Slår av alt som krev backenden, så brukaren får ei forklaring i staden for feil.
+func _set_backend_enabled(on: bool) -> void:
+	for b in [index_now_button, search_button, reindex_button, bench_button, html_button,
+			open_files_button, open_signals_button, open_ego_button]:
+		if b:
+			b.disabled = not on
 
 func _setup_ui() -> void:
 	# Tab titler
@@ -414,6 +434,9 @@ func _on_reindex_pressed() -> void:
 	_start_async_index(["index", "--force"], false)
 
 func _start_async_index(args: Array[String], is_welcome: bool) -> void:
+	if not python_ok:
+		status_label.text = t("err_python") + "  " + t("python_install")
+		return
 	if index_thread and index_thread.is_alive():
 		return
 	
@@ -487,6 +510,9 @@ func _on_poll_progress(is_welcome: bool) -> void:
 
 func _on_search_pressed() -> void:
 	autocomplete_box.visible = false
+	if not python_ok:
+		status_label.text = t("err_python") + "  " + t("python_install")
+		return
 	var modes = ["find", "outline", "callers", "signal", "rpc", "impact", "deps", "status"]
 	var idx = mode_option.selected
 	var cmd = modes[idx]
@@ -522,17 +548,61 @@ func _on_open_ego_pressed() -> void:
 	_open_html_view("ego", sym, depth)
 
 func _open_html_view(view_name: String, ego: String = "", depth: int = 2) -> void:
-	status_label.text = t("indexing")
+	if not python_ok:
+		status_label.text = t("err_python") + "  " + t("python_install")
+		return
+	if html_thread and html_thread.is_alive():
+		return
+	html_view_name = view_name
+	status_label.text = t("graph_generating")
+	html_thread = Thread.new()
+	html_thread.start(_run_html_worker.bind(view_name, ego, depth))
+	if not html_timer:
+		html_timer = Timer.new()
+		html_timer.wait_time = 0.15
+		html_timer.timeout.connect(_on_html_poll)
+		add_child(html_timer)
+	html_timer.start()
+
+# Grafgenerering er denaste tunge jobben som ikkje allereie var tråda -
+# elles frys editoren i fleire sekund på store prosjekt.
+func _run_html_worker(view_name: String, ego: String, depth: int) -> void:
 	var root_dir = ProjectSettings.globalize_path("res://")
 	var args = [backend_path, "--path", root_dir, "html", "--view", view_name, "--open"]
 	if not ego.is_empty():
 		args.append_array(["--ego", ego, "--depth", str(depth)])
 	var out: Array = []
 	OS.execute(python_cmd, args, out, true)
-	status_label.text = "Web Graph: " + view_name
+
+func _on_html_poll() -> void:
+	if html_thread == null:
+		return
+	if html_thread.is_alive():
+		return
+	html_thread.wait_to_finish()
+	html_thread = null
+	if html_timer:
+		html_timer.stop()
+	status_label.text = "Web Graph: " + html_view_name
+
+func _exit_tree() -> void:
+	if poll_timer:
+		poll_timer.stop()
+	if html_timer:
+		html_timer.stop()
+	# Trådar må høvlast før noden døyr, elles kan editoren krasja ved avlsuting.
+	if index_thread != null:
+		index_thread.wait_to_finish()
+		index_thread = null
+	if html_thread != null:
+		html_thread.wait_to_finish()
+		html_thread = null
 
 # --- Benchmark & Visuelle Diagrammer (Støtter Engelsk og Bokmål) ---
 func _on_bench_pressed() -> void:
+	if not python_ok:
+		bench_status.text = t("err_python")
+		return
 	bench_status.text = t("bench_running")
 	bench_display.clear()
 	bench_progress.visible = true
