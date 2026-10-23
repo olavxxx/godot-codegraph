@@ -141,6 +141,156 @@ bbcode_enabled = true
 selection_enabled = true
 context_menu_enabled = true
 
+[node name="GraphTab" type="VBoxContainer" parent="MainTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 12
+metadata/_tab_index = 2
+
+[node name="GraphToolbar" type="HBoxContainer" parent="MainTabs/GraphTab"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="GraphTitleLabel" type="Label" parent="MainTabs/GraphTab/GraphToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = "Interactive 2.5D Obsidian Web Graph"
+
+[node name="GraphLangButton" type="Button" parent="MainTabs/GraphTab/GraphToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "🌐 EN"
+
+[node name="GraphScroll" type="ScrollContainer" parent="MainTabs/GraphTab"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CardsBox" type="VBoxContainer" parent="MainTabs/GraphTab/GraphScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="CardFiles" type="PanelContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox"]
+layout_mode = 2
+
+[node name="BoxFiles" type="VBoxContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardFiles"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CardFilesTitle" type="Label" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardFiles/BoxFiles"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = "📁 Files & Architecture Graph"
+
+[node name="CardFilesDesc" type="Label" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardFiles/BoxFiles"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+text = "Visualizes script dependencies, class inheritance, scenes, and autoload hubs aggregated to the file level."
+autowrap_mode = 2
+
+[node name="OpenFilesButton" type="Button" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardFiles/BoxFiles"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "▶ Open Architecture Graph (Browser)"
+
+[node name="CardSignals" type="PanelContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox"]
+layout_mode = 2
+
+[node name="BoxSignals" type="VBoxContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardSignals"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CardSignalsTitle" type="Label" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardSignals/BoxSignals"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.9, 0.42, 1)
+theme_override_font_sizes/font_size = 14
+text = "⚡ Signal & Scene Wiring Graph"
+
+[node name="CardSignalsDesc" type="Label" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardSignals/BoxSignals"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+text = "Maps every custom signal, emitter, listener, and .tscn scene connection across the entire game."
+autowrap_mode = 2
+
+[node name="OpenSignalsButton" type="Button" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardSignals/BoxSignals"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "▶ Open Signal Graph (Browser)"
+
+[node name="CardEgo" type="PanelContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox"]
+layout_mode = 2
+
+[node name="BoxEgo" type="VBoxContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CardEgoTitle" type="Label" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.31, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "🎯 Neighborhood / Ego Graph"
+
+[node name="CardEgoDesc" type="Label" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+text = "Focuses on a specific class, autoload, or symbol and maps its direct connections up to chosen depth."
+autowrap_mode = 2
+
+[node name="EgoControlRow" type="HBoxContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="EgoInput" type="LineEdit" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo/EgoControlRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Symbol name (e.g. Player, GameState)..."
+clear_button_enabled = true
+
+[node name="EgoDepthLabel" type="Label" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo/EgoControlRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+text = "Depth:"
+
+[node name="EgoDepthOption" type="OptionButton" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo/EgoControlRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+
+[node name="OpenEgoButton" type="Button" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo/EgoControlRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 34)
+layout_mode = 2
+text = "▶ Open Neighborhood"
+
+[node name="TipsPanel" type="PanelContainer" parent="MainTabs/GraphTab"]
+layout_mode = 2
+
+[node name="TipsLabel" type="Label" parent="MainTabs/GraphTab/TipsPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+text = "💡 Browser Shortcuts: / to search, F to fit, L for labels, Drag to pan, Scroll to zoom, Click node for inspector."
+autowrap_mode = 2
+
 [node name="WelcomePanel" type="PanelContainer" parent="."]
 unique_name_in_owner = true
 visible = false

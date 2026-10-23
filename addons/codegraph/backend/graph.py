@@ -1642,13 +1642,23 @@ def gather_view(con, view: str, ego: str | None, depth: int, limit: int) -> dict
 def cmd_html(con, root: Path, view: str, ego: str | None, depth: int, limit: int, open_it: bool, out: str | None) -> int:
     tpl = Path(__file__).with_name("viewer_template.html")
     if not tpl.is_file():
-        sys.exit(f"mal mangler: {tpl}")
+        sys.exit(f"template missing: {tpl}")
     data = gather_view(con, view, ego, depth, limit)
+    lang = "en"
+    lang_file = root / DB_DIR / "lang.txt"
+    if lang_file.is_file():
+        try:
+            saved = lang_file.read_text(encoding="utf-8").strip().lower()
+            if saved in ("en", "no"):
+                lang = saved
+        except Exception:
+            pass
+    data["lang"] = lang
     html = tpl.read_text(encoding="utf-8").replace("__DATA_JSON__", json.dumps(data, ensure_ascii=False))
     target = Path(out) if out else root / DB_DIR / f"graph_{view}.html"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(html, encoding="utf-8")
-    print(f"skrev {target}  ({len(data['nodes'])} noder, {len(data['links'])} kanter, {len(html)//1024} KB)")
+    print(f"wrote {target}  ({len(data['nodes'])} nodes, {len(data['links'])} edges, {len(html)//1024} KB)")
     if open_it:
         import webbrowser
         webbrowser.open(target.as_uri())

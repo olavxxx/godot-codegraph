@@ -63,6 +63,20 @@ const STRINGS = {
 		"btn_reindex": "🔄 Reindex",
 		"btn_run_bench": "▶ Run Project Benchmark",
 		"btn_open_json": "📄 Open bench.json",
+		"tab_graph": "🌐 Visual Graph",
+		"graph_header": "Interactive 2.5D Obsidian Web Graph",
+		"card_files_title": "📁 Files & Architecture Graph",
+		"card_files_desc": "Visualizes script dependencies, class inheritance, scenes, and autoload hubs aggregated to the file level.",
+		"btn_open_files": "▶ Open Architecture Graph (Browser)",
+		"card_signals_title": "⚡ Signal & Scene Wiring Graph",
+		"card_signals_desc": "Maps every custom signal, emitter, listener, and .tscn scene connection across the entire game.",
+		"btn_open_signals": "▶ Open Signal Graph (Browser)",
+		"card_ego_title": "🎯 Neighborhood / Ego Graph",
+		"card_ego_desc": "Focuses on a specific class, autoload, or symbol and maps its direct connections up to chosen depth.",
+		"ego_input_ph": "Symbol name (e.g. Player, GameState)...",
+		"depth": "Depth:",
+		"btn_open_ego": "▶ Open Neighborhood (Browser)",
+		"graph_tips": "💡 Browser Shortcuts: / to search, F to fit, L for labels, Drag to pan, Scroll to zoom, Click node for inspector.",
 		"welcome_title": "Welcome to CodeGraph",
 		"welcome_desc": "Your project has not been indexed yet. Initial indexing takes only a few seconds and enables instant symbol navigation, scene signal wires, and @rpc mapping.",
 		"btn_index_now": "⚡ Build Initial Index",
@@ -113,6 +127,20 @@ const STRINGS = {
 		"btn_reindex": "🔄 Reindekser",
 		"btn_run_bench": "▶ Kjør ytelsestest på dette prosjektet",
 		"btn_open_json": "📄 Åpne bench.json",
+		"tab_graph": "🌐 Visuell Graf",
+		"graph_header": "Interaktiv 2.5D Obsidian Web-graf",
+		"card_files_title": "📁 Filer & Arkitektur-graf",
+		"card_files_desc": "Viser skriptavhengigheter, klassearv, scener og autoload-knutepunkter aggregert på filnivå.",
+		"btn_open_files": "▶ Åpne Arkitektur-graf (Nettleser)",
+		"card_signals_title": "⚡ Signal- & Scenetilkoblings-graf",
+		"card_signals_desc": "Full oversikt over alle signaler, sendere, lyttere og .tscn-tilkoblinger i hele spillet.",
+		"btn_open_signals": "▶ Åpne Signal-graf (Nettleser)",
+		"card_ego_title": "🎯 Nabolags- / Ego-graf",
+		"card_ego_desc": "Fokuserer på en bestemt klasse, autoload eller symbol og kartlegger koblinger i valgt dybde.",
+		"ego_input_ph": "Symbolnavn (f.eks. Player, GameState)...",
+		"depth": "Dybde:",
+		"btn_open_ego": "▶ Åpne Nabolags-graf (Nettleser)",
+		"graph_tips": "💡 Hurtigtaster i nettleseren: / for søk, F for tilpass, L for etiketter, Dra for å panorere, Rull for å zoome, Klikk på node for inspektør.",
 		"welcome_title": "Velkommen til CodeGraph",
 		"welcome_desc": "Dette prosjektet er ikke indeksert ennå. Første indeksering tar bare noen sekunder og gir deg lynrask kode- og signalnavigasjon.",
 		"btn_index_now": "⚡ Bygg indeks nå",
@@ -172,6 +200,24 @@ var lang: String = "en"
 @onready var bench_status: Label = %BenchStatus
 @onready var bench_display: RichTextLabel = %BenchDisplay
 @onready var bench_progress: ProgressBar = %BenchProgress
+
+# Web Graph fane
+@onready var graph_tab: VBoxContainer = %GraphTab
+@onready var graph_title_label: Label = %GraphTitleLabel
+@onready var graph_lang_button: Button = %GraphLangButton
+@onready var card_files_title: Label = %CardFilesTitle
+@onready var card_files_desc: Label = %CardFilesDesc
+@onready var open_files_button: Button = %OpenFilesButton
+@onready var card_signals_title: Label = %CardSignalsTitle
+@onready var card_signals_desc: Label = %CardSignalsDesc
+@onready var open_signals_button: Button = %OpenSignalsButton
+@onready var card_ego_title: Label = %CardEgoTitle
+@onready var card_ego_desc: Label = %CardEgoDesc
+@onready var ego_input: LineEdit = %EgoInput
+@onready var ego_depth_label: Label = %EgoDepthLabel
+@onready var ego_depth_option: OptionButton = %EgoDepthOption
+@onready var open_ego_button: Button = %OpenEgoButton
+@onready var tips_label: Label = %TipsLabel
 
 var python_cmd: String = "python"
 var backend_path: String = ""
@@ -233,6 +279,43 @@ func _setup_ui() -> void:
 	# Tab titler
 	main_tabs.set_tab_title(0, t("tab_search"))
 	main_tabs.set_tab_title(1, t("tab_bench"))
+	main_tabs.set_tab_title(2, t("tab_graph"))
+	
+	# Web Graph fane
+	if graph_title_label: graph_title_label.text = t("graph_header")
+	if card_files_title: card_files_title.text = t("card_files_title")
+	if card_files_desc: card_files_desc.text = t("card_files_desc")
+	if open_files_button:
+		open_files_button.text = t("btn_open_files")
+		if not open_files_button.pressed.is_connected(_on_open_files_pressed):
+			open_files_button.pressed.connect(_on_open_files_pressed)
+	if card_signals_title: card_signals_title.text = t("card_signals_title")
+	if card_signals_desc: card_signals_desc.text = t("card_signals_desc")
+	if open_signals_button:
+		open_signals_button.text = t("btn_open_signals")
+		if not open_signals_button.pressed.is_connected(_on_open_signals_pressed):
+			open_signals_button.pressed.connect(_on_open_signals_pressed)
+	if card_ego_title: card_ego_title.text = t("card_ego_title")
+	if card_ego_desc: card_ego_desc.text = t("card_ego_desc")
+	if ego_input:
+		ego_input.placeholder_text = t("ego_input_ph")
+		if not ego_input.text_submitted.is_connected(func(_t): _on_open_ego_pressed()):
+			ego_input.text_submitted.connect(func(_t): _on_open_ego_pressed())
+	if ego_depth_label: ego_depth_label.text = t("depth")
+	if ego_depth_option and ego_depth_option.item_count == 0:
+		ego_depth_option.add_item("1 step")
+		ego_depth_option.add_item("2 steps")
+		ego_depth_option.add_item("3 steps")
+		ego_depth_option.selected = 1
+	if open_ego_button:
+		open_ego_button.text = t("btn_open_ego")
+		if not open_ego_button.pressed.is_connected(_on_open_ego_pressed):
+			open_ego_button.pressed.connect(_on_open_ego_pressed)
+	if tips_label: tips_label.text = t("graph_tips")
+	if graph_lang_button:
+		graph_lang_button.text = "🌐 " + lang.to_upper()
+		if not graph_lang_button.pressed.is_connected(_toggle_language):
+			graph_lang_button.pressed.connect(_toggle_language)
 	
 	# Språkknapp
 	lang_button.text = "🌐 " + lang.to_upper()
@@ -415,11 +498,33 @@ func _on_search_pressed() -> void:
 	_run_codegraph(args)
 
 func _on_html_pressed() -> void:
-	var out: Array = []
+	main_tabs.current_tab = 2
+
+func _on_open_files_pressed() -> void:
+	_open_html_view("files")
+
+func _on_open_signals_pressed() -> void:
+	_open_html_view("signals")
+
+func _on_open_ego_pressed() -> void:
+	var sym = ego_input.text.strip_edges()
+	if sym.is_empty():
+		sym = search_input.text.strip_edges()
+	if sym.is_empty():
+		status_label.text = t("enter_term")
+		return
+	var depth = ego_depth_option.selected + 1
+	_open_html_view("ego", sym, depth)
+
+func _open_html_view(view_name: String, ego: String = "", depth: int = 2) -> void:
 	status_label.text = t("indexing")
 	var root_dir = ProjectSettings.globalize_path("res://")
-	OS.execute(python_cmd, [backend_path, "--path", root_dir, "html", "--open"], out, true)
-	status_label.text = "HTML-graf åpnet i nettleser."
+	var args = [backend_path, "--path", root_dir, "html", "--view", view_name, "--open"]
+	if not ego.is_empty():
+		args.append_array(["--ego", ego, "--depth", str(depth)])
+	var out: Array = []
+	OS.execute(python_cmd, args, out, true)
+	status_label.text = "Web Graph: " + view_name
 
 # --- Benchmark & Visuelle Diagrammer (Støtter Engelsk og Bokmål) ---
 func _on_bench_pressed() -> void:
