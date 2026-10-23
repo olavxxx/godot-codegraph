@@ -189,8 +189,11 @@ var lang: String = "en"
 @onready var lang_button: Button = %LangButton
 @onready var status_label: Label = %StatusLabel
 @onready var output_display: RichTextLabel = %OutputDisplay
-@onready var autocomplete_popup: PopupPanel = %AutocompletePopup
+@onready var autocomplete_box: PanelContainer = %AutocompleteBox
 @onready var autocomplete_list: ItemList = %AutocompleteList
+
+var is_completing: bool = false
+var last_typed: String = ""
 @onready var search_progress: ProgressBar = %SearchProgress
 
 # Benchmarkfane
@@ -364,6 +367,8 @@ func _setup_ui() -> void:
 		search_input.text_submitted.connect(_on_search_submitted)
 	if not search_input.text_changed.is_connected(_on_search_text_changed):
 		search_input.text_changed.connect(_on_search_text_changed)
+	if not search_input.gui_input.is_connected(_on_search_input_gui_input):
+		search_input.gui_input.connect(_on_search_input_gui_input)
 	if not html_button.pressed.is_connected(_on_html_pressed):
 		html_button.pressed.connect(_on_html_pressed)
 	if not reindex_button.pressed.is_connected(_on_reindex_pressed):
@@ -481,7 +486,7 @@ func _on_poll_progress(is_welcome: bool) -> void:
 		_check_indexed_state()
 
 func _on_search_pressed() -> void:
-	autocomplete_popup.hide()
+	autocomplete_box.visible = false
 	var modes = ["find", "outline", "callers", "signal", "rpc", "impact", "deps", "status"]
 	var idx = mode_option.selected
 	var cmd = modes[idx]
@@ -707,48 +712,117 @@ func _on_meta_clicked(meta: Variant) -> void:
 # --- Autocomplete funksjonalitet ---
 func _load_symbol_cache() -> void:
 	symbol_cache.clear()
-	var root_dir = ProjectSettings.globalize_path("res://")
-	var out: Array = []
-	var py_script = "import sqlite3, json, sys; con = sqlite3.connect('.codegraph/graph.db'); rows = con.execute('SELECT DISTINCT name, kind FROM nodes WHERE kind IN (\"class\",\"fn\",\"signal\",\"autoload\") LIMIT 3500').fetchall(); print(json.dumps([{'n':r[0],'k':r[1]} for r in rows]))"
-	var ec = OS.execute(python_cmd, ["-c", py_script], out, true)
-	if ec == 0 and not out.is_empty():
+	var json_path = "res://.codegraph/symbols.json"
+	if FileAccess.file_exists(json_path):
+		var content_str = FileAccess.get_file_as_string(json_path)
 		var json = JSON.new()
-		if json.parse(out[0]) == OK and json.data is Array:
+		if json.parse(content_str) == OK and json.data is Array:
 			for item in json.data:
 				symbol_cache.append(item)
+			return
+	
+	# Fallback: spør backend direkte med absolutt sti
+	var db_abs = ProjectSettings.globalize_path("res://.codegraph/graph.db")
+	if not FileAccess.file_exists("res://.codegraph/graph.db"):
+		return
+	var out: Array = []
+	var py_one = "import sqlite3, json; con = sqlite3.connect(r'%s'); rows = con.execute('SELECT DISTINCT name, kind FROM nodes WHERE kind IN ("class","fn","signal","autoload","group") LIMIT 4000').fetchall(); print(json.dumps([{'n':r[0],'k':r[1]} for r in rows]))" % db_abs
+	var ec = OS.execute(python_cmd, ["-c", py_one], out, true)
+	if ec == 0 and not out.is_empty():
+		var json2 = JSON.new()
+		if json2.parse(out[0]) == OK and json2.data is Array:
+			for item in json2.data:
+				symbol_cache.append(item)
+
+func _on_search_input_gui_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_TAB:
+			if search_input.has_selection() or (autocomplete_box.visible and autocomplete_list.item_count > 0):
+				accept_event()
+				search_input.deselect()
+				search_input.caret_column = search_input.text.length()
+				autocomplete_box.visible = false
+				last_typed = search_input.text
+		elif event.keycode == KEY_RIGHT:
+			if search_input.has_selection():
+				search_input.deselect()
+				search_input.caret_column = search_input.text.length()
+				autocomplete_box.visible = false
+		elif event.keycode == KEY_DOWN and autocomplete_box.visible:
+			accept_event()
+			autocomplete_list.grab_focus()
+			if autocomplete_list.item_count > 0:
+				autocomplete_list.select(0)
+		elif event.keycode == KEY_ESCAPE:
+			autocomplete_box.visible = false
+			search_input.deselect()
 
 func _on_search_text_changed(new_text: String) -> void:
-	var q = new_text.strip_edges().to_lower()
-	if q.length() < 2 or symbol_cache.is_empty():
-		autocomplete_popup.hide()
+	if is_completing:
+		return
+	
+	var raw = new_text.strip_edges()
+	if raw.length() < 2 or symbol_cache.is_empty():
+		autocomplete_box.visible = false
+		last_typed = raw
+		return
+	
+	var q = raw.to_lower()
+	var is_backspace = raw.length() < last_typed.length()
+	last_typed = raw
+	
+	var prefix_matches: Array[Dictionary] = []
+	var other_matches: Array[Dictionary] = []
+	for sym in symbol_cache:
+		var name_str = sym.get("n", "")
+		var lower_name = name_str.to_lower()
+		if lower_name.begins_with(q):
+			prefix_matches.append(sym)
+			if prefix_matches.size() >= 10:
+				break
+		elif q in lower_name and other_matches.size() < 6:
+			other_matches.append(sym)
+	
+	var all_matches: Array[Dictionary] = []
+	all_matches.append_array(prefix_matches)
+	if all_matches.size() < 8:
+		all_matches.append_array(other_matches)
+	
+	if all_matches.is_empty():
+		autocomplete_box.visible = false
 		return
 	
 	autocomplete_list.clear()
-	var hits = 0
-	for sym in symbol_cache:
+	for sym in all_matches:
+		var k = sym.get("k", "fn")
 		var name_str = sym.get("n", "")
-		if q in name_str.to_lower():
-			var k = sym.get("k", "fn")
-			var display_text = "[%s] %s" % [k, name_str]
-			autocomplete_list.add_item(display_text)
-			hits += 1
-			if hits >= 10:
-				break
+		var display_text = "[%s]  %s" % [k, name_str]
+		autocomplete_list.add_item(display_text)
 	
-	if hits > 0:
-		var pos = search_input.global_position + Vector2(0, search_input.size.y + 4)
-		autocomplete_popup.position = Vector2i(int(pos.x), int(pos.y))
-		autocomplete_popup.size = Vector2i(int(search_input.size.x), min(hits * 28 + 10, 240))
-		autocomplete_popup.show()
-	else:
-		autocomplete_popup.hide()
+	autocomplete_box.visible = true
+	
+	# Inline auto-completion rett i tekstfeltet med markert forslag
+	if not is_backspace and prefix_matches.size() > 0:
+		var top_name = prefix_matches[0].get("n", "")
+		if top_name.to_lower().begins_with(q) and top_name.length() > raw.length():
+			is_completing = true
+			search_input.text = top_name
+			search_input.select(raw.length(), top_name.length())
+			search_input.caret_column = raw.length()
+			is_completing = false
 
 func _on_autocomplete_selected(index: int) -> void:
 	var item_text = autocomplete_list.get_item_text(index)
-	if "] " in item_text:
+	if "]  " in item_text:
+		var parts = item_text.split("]  ")
+		search_input.text = parts[1]
+	elif "] " in item_text:
 		var parts = item_text.split("] ")
 		search_input.text = parts[1]
 	else:
 		search_input.text = item_text
-	autocomplete_popup.hide()
+	search_input.deselect()
+	search_input.caret_column = search_input.text.length()
+	autocomplete_box.visible = false
+	last_typed = search_input.text
 	_on_search_pressed()

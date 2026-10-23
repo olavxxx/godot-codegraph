@@ -720,6 +720,17 @@ def index(root: Path, force: bool = False, want_web: bool = False, want_addons: 
     con.execute("INSERT INTO meta(k,v) VALUES('scope',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
                 (scope_str(want_web, want_addons),))
     con.commit()
+    try:
+        sym_rows = con.execute("""
+            SELECT DISTINCT name, kind FROM nodes 
+            WHERE kind IN ('class','fn','signal','autoload','group')
+            ORDER BY length(name) ASC, name ASC
+            LIMIT 5000
+        """).fetchall()
+        sym_file = root / DB_DIR / "symbols.json"
+        sym_file.write_text(json.dumps([{"n": r[0], "k": r[1]} for r in sym_rows], ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
     out = dict(
         nodes=con.execute("SELECT count(*) FROM nodes").fetchone()[0],
         edges=con.execute("SELECT count(*) FROM edges").fetchone()[0],
