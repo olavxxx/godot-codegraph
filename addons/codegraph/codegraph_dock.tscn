@@ -157,6 +157,7 @@ selection_enabled = true
 context_menu_enabled = true
 
 [node name="GraphTab" type="VBoxContainer" parent="MainTabs"]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 12

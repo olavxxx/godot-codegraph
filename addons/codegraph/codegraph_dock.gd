@@ -721,13 +721,12 @@ func _load_symbol_cache() -> void:
 				symbol_cache.append(item)
 			return
 	
-	# Fallback: spør backend direkte med absolutt sti
-	var db_abs = ProjectSettings.globalize_path("res://.codegraph/graph.db")
+	# Fallback: backenden eig symbolformatet, så be han om det - aldri SQL her.
 	if not FileAccess.file_exists("res://.codegraph/graph.db"):
 		return
 	var out: Array = []
-	var py_one = "import sqlite3, json; con = sqlite3.connect(r'%s'); rows = con.execute('SELECT DISTINCT name, kind FROM nodes WHERE kind IN ("class","fn","signal","autoload","group") LIMIT 4000').fetchall(); print(json.dumps([{'n':r[0],'k':r[1]} for r in rows]))" % db_abs
-	var ec = OS.execute(python_cmd, ["-c", py_one], out, true)
+	var args = [backend_path, "--path", ProjectSettings.globalize_path("res://"), "symbols", "--limit", "4000"]
+	var ec = OS.execute(python_cmd, args, out, true)
 	if ec == 0 and not out.is_empty():
 		var json2 = JSON.new()
 		if json2.parse(out[0]) == OK and json2.data is Array:

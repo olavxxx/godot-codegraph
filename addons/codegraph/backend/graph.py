@@ -1461,6 +1461,17 @@ def cmd_status(con, root: Path) -> int:
     return 0
 
 
+def cmd_symbols(con, limit: int = 5000) -> int:
+    """JSON-liste av symbolnamn på same format som .codegraph/symbols.json.
+    Editoren brukar dette til autocomplete utan å kjenne SQLite-skjemaet."""
+    rows = con.execute(
+        """SELECT DISTINCT name, kind FROM nodes
+           WHERE kind IN ('class','fn','signal','autoload','group')
+           ORDER BY length(name) ASC, name ASC LIMIT ?""", (limit,)).fetchall()
+    print(json.dumps([{"n": r[0], "k": r[1]} for r in rows], ensure_ascii=False))
+    return 0
+
+
 def cmd_md(con, scope: str | None, budget: int | None, rank: bool, show_signals: bool) -> int:
     """Menneske- og agentlesbar Markdown. Rekkfølge = rekkevidde (Aider-stil)."""
     con.row_factory = sqlite3.Row
@@ -1804,6 +1815,7 @@ def main() -> int:
         p.add_argument("--all", action="store_true", help="vis alle rader (forstyrrar utskrifta)")
         return p
 
+    q = add_lim(sub.add_parser("symbols", help="JSON-liste av symbol (autocomplete for editoren)"), 5000)
     q = add_lim(sub.add_parser("find"), 40)
     q.add_argument("name")
     q = add_lim(sub.add_parser("outline"))
@@ -1859,6 +1871,8 @@ def main() -> int:
     try:
         if a.cmd in (None, "status"):
             return cmd_status(con, root)
+        if a.cmd == "symbols":
+            return cmd_symbols(con, L(a))
         if a.cmd == "find":
             return cmd_find(con, a.name, L(a))
         if a.cmd == "outline":
