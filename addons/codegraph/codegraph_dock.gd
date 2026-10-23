@@ -72,6 +72,7 @@ const STRINGS = {
 		"done_ms": "Completed in %d ms (exit %d)",
 		"err_python": "Warning: Python 3 was not found in PATH. Please install Python 3.",
 		"enter_term": "Please enter a search term.",
+		"bench_empty_project": "Project needs at least 2 GDScript files to run a benchmark suite.",
 		"bench_title": "═══ BENCHMARK RESULTS & CHARTS ═══",
 		"bench_saved": "Saved automatically to:",
 		"bench_time": "⚡ TIME SAVED",
@@ -121,6 +122,7 @@ const STRINGS = {
 		"done_ms": "Ferdig på %d ms (exit %d)",
 		"err_python": "Advarsel: Python 3 ble ikke funnet i PATH. Vennligst installer Python 3.",
 		"enter_term": "Vennligst oppgi et søkeord.",
+		"bench_empty_project": "Prosjektet må ha minst 2 GDScript-filer for å kjøre en ytelsestest.",
 		"bench_title": "═══ BENCHMARK-RESULTATER & DIAGRAM ═══",
 		"bench_saved": "Lagret automatisk til:",
 		"bench_time": "⚡ SPART TID",
@@ -458,7 +460,7 @@ func _format_bench_json_as_charts(json_text: String) -> String:
 	
 	var rows = json.data
 	if rows.is_empty():
-		return ""
+		return "[color=#ffd166][b]%s[/b][/color]" % t("bench_empty_project")
 	
 	var is_no = (lang == "no")
 	
@@ -494,8 +496,11 @@ func _format_bench_json_as_charts(json_text: String) -> String:
 	for r in rows:
 		var id = int(r.get("id", 0))
 		var spm = r.get("spm", "")
-		if is_no and TASK_NAMES_NO.has(id):
-			spm = TASK_NAMES_NO[id]
+		if is_no:
+			if r.has("spm_no") and not str(r.get("spm_no")).is_empty():
+				spm = str(r.get("spm_no"))
+			elif TASK_NAMES_NO.has(id):
+				spm = TASK_NAMES_NO[id]
 		
 		var g_tok = int(r.get("grep_dugleg_token", 0))
 		var k_tok = int(r.get("graf_token", 0))

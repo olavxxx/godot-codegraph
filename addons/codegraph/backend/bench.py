@@ -1,4 +1,6 @@
 """bench.py — benchmarks code graph against text search on real code exploration tasks.
+Dynamically auto-discovers real signals, scripts, callers, scene wires, and autoloads
+from whatever Godot project it is executed in.
 
 Run:    python tools/codegraph/bench.py            (all tasks)
        python tools/codegraph/bench.py --tasks=4,5
@@ -45,7 +47,7 @@ def grep_side(root: Path, files: list[str], needles: list[str]) -> tuple[str, fl
                 hits.setdefault(rel, []).append(i)
     search_ms = (time.time() - t0) * 1000
 
-    # fase 2: agenten opnar kontekst rundt trefa for å forstå dei
+    # phase 2: agent opens context around hits to understand them
     t1 = time.time()
     out: list[str] = []
     segments = 0
@@ -104,57 +106,243 @@ def graph_side(con, fn, *args) -> tuple[str, float]:
     return buf.getvalue(), (time.time() - t0) * 1000
 
 
-TASKS = [
-    dict(id=1, spm="Who emits mission_completed, and who listens?",
-         grep=[r"mission_completed"],
-         ane="All text matches including comments, variable names and strings in test files.",
-         graf=lambda con: kg.cmd_signal(con, "mission_completed")),
-    dict(id=2, spm="Outline of BeatMakerUI.gd without opening file",
-         grep=[r"func _on_", r"^extends"], files=["scripts/ui/BeatMakerUI.gd"],
-         ane="Fastest for grep - graph loses. Point of outline is to get structure without bloating context.",
-         graf=lambda con: kg.cmd_outline(con, "BeatMakerUI")),
-    dict(id=3, spm="Who calls take_damage?",
-         grep=[r"\btake_damage\b"],
-         ane="Matches across 53 different methods with the same name. Uncertain who is caller vs receiver.",
-         graf=lambda con: kg._dir(con, "take_damage", "callers")),
-    dict(id=4, spm="Which scene connections lead to close()?",
-         grep=[r'method="close"'],
-         ane="Matches in .tscn, but grep cannot resolve which script receives the signal.",
-         graf=lambda con: kg.cmd_signal(con, "close")),
-    dict(id=5, spm="Who receives pressed in .tscn files?",
-         grep=[r'\[connection signal="pressed"'],
-         ane="Scene connection lines without receiver. Graph resolves exact script:line for each.",
-         graf=lambda con: kg.cmd_signal(con, "pressed")),
-    dict(id=6, spm="Where do @rpc functions exist, and who calls them?",
-         grep=[r"^[ \t]*@rpc"],
-         ane="Annotated lines, but grep cannot see RPC transfer mode, authority, or call counts.",
-         graf=lambda con: kg.cmd_rpc(con, None)),
-    dict(id=7, spm="What is impacted by changing GameState?",
-         grep=[r"\bGameState\."],
-         ane="Over 1,470 autoload calls. Exceeds LLM context window without a graph index.",
-         graf=lambda con: kg.cmd_impact(con, "GameState", 2)),
-    dict(id=8, spm="Who uses group 'civilians'?",
-         grep=[r'"civilians"'],
-         ane="Dozens of matches without distinguishing membership (in_group) from querying (queries_group).",
-         graf=lambda con: kg.cmd_find(con, "civilians")),
-]
+def discover_tasks(con, root: Path) -> list[dict]:
+    """Dynamically auto-discovers representative symbols, scripts, scene wires,
+    and autoloads from whatever Godot project is being analyzed."""
+    total_scripts = con.execute("SELECT count(*) FROM files WHERE path LIKE '%.gd' AND addons = 0").fetchone()[0]
+    if total_scripts == 0:
+        total_scripts = con.execute("SELECT count(*) FROM files WHERE path LIKE '%.gd'").fetchone()[0]
+
+    if total_scripts < 2:
+        return []
+
+    tasks = []
+
+    # 1. Top Signal (with emitters or listeners)
+    sig_row = con.execute("""
+        SELECT nd.name, count(*) as c
+        FROM edges e
+        JOIN nodes nd ON e.dst = nd.id
+        WHERE e.kind IN ('emits', 'connects_to') AND nd.kind = 'signal'
+        GROUP BY nd.name
+        ORDER BY c DESC LIMIT 1
+    """).fetchone()
+    if not sig_row:
+        sig_row = con.execute("SELECT name FROM nodes WHERE kind = 'signal' LIMIT 1").fetchone()
+
+    sig_name = sig_row[0] if sig_row else "pressed"
+    tasks.append(dict(
+        id=1,
+        spm=f"Who emits {sig_name}, and who listens?",
+        spm_no=f"Hvem emitterer {sig_name}, og hvem lytter?",
+        grep=[sig_name],
+        ane="All text matches including comments and strings, vs resolved signal graph.",
+        graf=lambda c, s=sig_name: kg.cmd_signal(c, s)
+    ))
+
+    # 2. Largest / Key script outline
+    script_row = con.execute("""
+        SELECT path, lines FROM files
+        WHERE path LIKE '%.gd' AND path NOT LIKE '%test%' AND addons = 0
+        ORDER BY lines DESC LIMIT 1
+    """).fetchone()
+    if not script_row:
+        script_row = con.execute("""
+            SELECT path, lines FROM files
+            WHERE path LIKE '%.gd'
+            ORDER BY lines DESC LIMIT 1
+        """).fetchone()
+
+    script_path = script_row[0] if script_row else "Main.gd"
+    script_name = Path(script_path).name
+    script_stem = Path(script_path).stem
+    tasks.append(dict(
+        id=2,
+        spm=f"Outline of {script_name} without opening file",
+        spm_no=f"Oversikt over {script_name} uten å åpne filen",
+        grep=[r"func _", r"^extends", r"class_name"],
+        files=[script_path],
+        ane="Fastest for grep - graph outline provides structured overview without bloating LLM context.",
+        graf=lambda c, s=script_stem: kg.cmd_outline(c, s)
+    ))
+
+    # 3. Method callers
+    call_row = con.execute("""
+        SELECT nd.name, count(*) as c
+        FROM edges e
+        JOIN nodes nd ON e.dst = nd.id
+        WHERE e.kind = 'calls'
+          AND nd.name NOT LIKE 'assert_%'
+          AND nd.name NOT IN ('print', 'push_error', 'emit_signal', 'connect', 'queue_free')
+        GROUP BY nd.name
+        ORDER BY c DESC LIMIT 1
+    """).fetchone()
+    fn_name = call_row[0] if call_row else "take_damage"
+    tasks.append(dict(
+        id=3,
+        spm=f"Who calls {fn_name}() across the project?",
+        spm_no=f"Hvem kaller {fn_name}() på tvers av prosjektet?",
+        grep=[rf"\b{fn_name}\b"],
+        ane="Matches definition and call sites alike. Uncertain who is caller vs receiver.",
+        graf=lambda c, f=fn_name: kg._dir(c, f, "callers")
+    ))
+
+    # 4. Scene connection target method
+    tscn_method_row = con.execute("""
+        SELECT nd.name, count(*) as c
+        FROM edges e
+        JOIN nodes nd ON e.dst = nd.id
+        WHERE e.kind = 'connects_to'
+        GROUP BY nd.name
+        ORDER BY c DESC LIMIT 1
+    """).fetchone()
+    tscn_method = tscn_method_row[0] if tscn_method_row else "close"
+    tasks.append(dict(
+        id=4,
+        spm=f"Which scene connections lead to {tscn_method}()?",
+        spm_no=f"Hvilke scenetilkoblinger går til {tscn_method}()?",
+        grep=[rf'method="{tscn_method}"'],
+        ane="Matches in .tscn, but grep cannot resolve which script receives the signal.",
+        graf=lambda c, m=tscn_method: kg.cmd_signal(c, m)
+    ))
+
+    # 5. Scene connection signal
+    tscn_sig_row = con.execute("""
+        SELECT ns.name, count(*) as c
+        FROM edges e
+        JOIN nodes ns ON e.src = ns.id
+        WHERE e.kind = 'connects_to'
+        GROUP BY ns.name
+        ORDER BY c DESC LIMIT 1
+    """).fetchone()
+    tscn_sig = tscn_sig_row[0] if tscn_sig_row else "pressed"
+    tasks.append(dict(
+        id=5,
+        spm=f"Who receives '{tscn_sig}' in .tscn files?",
+        spm_no=f"Hvem mottar '{tscn_sig}' i .tscn-filer?",
+        grep=[rf'\[connection signal="{tscn_sig}"'],
+        ane="Scene connection lines without receiver. Graph resolves exact script:line for each.",
+        graf=lambda c, s=tscn_sig: kg.cmd_signal(c, s)
+    ))
+
+    # 6. Network @rpc (or class inheritance if single player)
+    rpc_row = con.execute("""
+        SELECT name FROM nodes WHERE kind = 'fn' AND meta LIKE '%rpc%' LIMIT 1
+    """).fetchone()
+    if rpc_row:
+        tasks.append(dict(
+            id=6,
+            spm="Where do @rpc functions exist, and who calls them?",
+            spm_no="Hvor finnes @rpc-funksjoner, og hvem kaller dem?",
+            grep=[r"^[ \t]*@rpc"],
+            ane="Annotated lines, but grep cannot see RPC transfer mode, authority, or call counts.",
+            graf=lambda c: kg.cmd_rpc(c, None)
+        ))
+    else:
+        ext_row = con.execute("""
+            SELECT nd.name, count(*) as c
+            FROM edges e
+            JOIN nodes nd ON e.dst = nd.id
+            WHERE e.kind = 'extends'
+            GROUP BY nd.name
+            ORDER BY c DESC LIMIT 1
+        """).fetchone()
+        base_name = ext_row[0] if ext_row else "Node"
+        tasks.append(dict(
+            id=6,
+            spm=f"Which classes extend {base_name} across the project?",
+            spm_no=f"Hvilke klasser arver fra {base_name}?",
+            grep=[rf"\bextends {base_name}\b"],
+            ane="Grep misses indirect subclasses and inner classes. Graph maps full hierarchy.",
+            graf=lambda c, b=base_name: kg._dir(c, b, "callers")
+        ))
+
+    # 7. Impact analysis of top Autoload or Central Class
+    impact_row = con.execute("""
+        SELECT nd.name, nd.kind, count(*) as c
+        FROM edges e
+        JOIN nodes nd ON e.dst = nd.id
+        WHERE nd.kind IN ('autoload', 'class')
+        GROUP BY nd.name
+        ORDER BY c DESC LIMIT 1
+    """).fetchone()
+    if not impact_row:
+        impact_row = con.execute("SELECT name, kind FROM nodes WHERE kind = 'class' LIMIT 1").fetchone()
+
+    impact_name = impact_row[0] if impact_row else "GameState"
+    is_autoload = (impact_row[1] == 'autoload') if impact_row else True
+    tasks.append(dict(
+        id=7,
+        spm=f"What is impacted by changing {impact_name}?",
+        spm_no=f"Hva påvirkes av å endre {impact_name}?",
+        grep=[rf"\b{impact_name}\."] if is_autoload else [rf"\b{impact_name}\b"],
+        ane="Widespread usage across project. Exceeds LLM context window without a graph index.",
+        graf=lambda c, n=impact_name: kg.cmd_impact(c, n, 2)
+    ))
+
+    # 8. Groups (or high-impact variable/constant if no groups)
+    group_row = con.execute("""
+        SELECT nd.name, count(*) as c
+        FROM edges e
+        JOIN nodes nd ON e.dst = nd.id
+        WHERE nd.kind = 'group'
+        GROUP BY nd.name
+        ORDER BY c DESC LIMIT 1
+    """).fetchone()
+    if group_row:
+        grp_name = group_row[0]
+        tasks.append(dict(
+            id=8,
+            spm=f"Who uses group '{grp_name}'?",
+            spm_no=f"Hvem bruker gruppen '{grp_name}'?",
+            grep=[rf'"{grp_name}"'],
+            ane="Matches without distinguishing membership (in_group) from querying (queries_group).",
+            graf=lambda c, g=grp_name: kg.cmd_find(c, g)
+        ))
+    else:
+        var_row = con.execute("""
+            SELECT nd.name, count(*) as c
+            FROM edges e
+            JOIN nodes nd ON e.dst = nd.id
+            WHERE nd.kind IN ('const', 'var')
+            GROUP BY nd.name
+            ORDER BY c DESC LIMIT 1
+        """).fetchone()
+        var_name = var_row[0] if var_row else "config"
+        tasks.append(dict(
+            id=8,
+            spm=f"Who references {var_name} across files?",
+            spm_no=f"Hvem refererer til {var_name} på tvers av filer?",
+            grep=[rf"\b{var_name}\b"],
+            ane="Matches local variables with same name. Graph traces true definition sites.",
+            graf=lambda c, v=var_name: kg.cmd_find(c, v)
+        ))
+
+    return tasks
 
 
 def run(root: Path, only: list[int] | None) -> list[dict]:
-    con = kg.db(dict(root=root))  # opnar + sjølvforfriskar indexen
+    con = kg.db(dict(root=root))  # opens + self-refreshes index
+    tasks = discover_tasks(con, root)
+    if not tasks:
+        print("Project contains fewer than 2 scripts. Cannot run benchmark suite.")
+        con.close()
+        return []
+
     alle = kg.list_files(root)
     rows = []
     try:
-        for t in TASKS:
+        for t in tasks:
             if only and t["id"] not in only:
                 continue
             files = t.get("files") or alle
             gtext, gms, ginfo = grep_side(root, files, t["grep"])
             ctext, cms = competent_grep(root, files, t["grep"])
-            ktext, kms_cold = graph_side(con, t["graf"])      # kald side: første touch av index-sidene
-            _, kms_warm = graph_side(con, t["graf"])          # varm: same spørsmål på nytt
+            ktext, kms_cold = graph_side(con, t["graf"])      # cold side: initial touch of index pages
+            _, kms_warm = graph_side(con, t["graf"])          # warm: same query repeated
             gt, ct, kt = tokens(gtext), tokens(ctext), tokens(ktext)
-            rows.append(dict(id=t["id"], spm=t["spm"], grep_info=ginfo, grep_ane=t.get("ane", ""),
+            rows.append(dict(id=t["id"], spm=t["spm"], spm_no=t.get("spm_no", t["spm"]),
+                             grep_info=ginfo, grep_ane=t.get("ane", ""),
                              grep_naiv_ms=round(gms, 1), grep_naiv_token=gt,
                              grep_dugleg_ms=round(cms, 1), grep_dugleg_token=ct,
                              graf_ms=round(kms_cold, 1), graf_ms_varm=round(kms_warm, 1),
@@ -174,9 +362,15 @@ def run(root: Path, only: list[int] | None) -> list[dict]:
 
 def report(root: Path, rows: list[dict]) -> None:
     out = root / kg.DB_DIR / "bench.md"
+    if not rows:
+        out.write_text("# CodeGraph Benchmark\n\nProject has insufficient GDScript files to run benchmark suite.\n", encoding="utf-8")
+        (root / kg.DB_DIR / "bench.json").write_text("[]", encoding="utf-8")
+        print(f"\nwrote {out} (empty)")
+        return
+
     L = ["# CodeGraph Benchmark", "",
          f"Repository: `{root}`",
-         f"{len(rows)} real-world tasks. Two grep models tested:",
+         f"{len(rows)} dynamically discovered tasks from active codebase. Two grep models tested:",
          "",
          "* **grep naive** = regular pattern search + opening ±25 lines around *every* match (what a naive bot does)",
          "* **grep competent** = file list with counts (like `rg -l -c`), then opening ±25 lines in the top 3 files",
@@ -212,6 +406,8 @@ def report(root: Path, rows: list[dict]) -> None:
         if r.get("grep_ane"):
             L.append(f"* **{r['id']}.** {r['spm']}  \n  {r['grep_ane']}")
     L += ["", "## Observations", "",
+          "* **Dynamic Auto-Discovery:** These tasks were automatically derived from this specific project's",
+          "  graph index, targeting its actual signals, largest scripts, call sites, and autoloads.",
           "* **Naive model is not the main opponent.** An agent opening ±25 lines around all matches",
           "  spends up to 50× more than one opening the top 3 files. The real token gain is measured against competent grep.",
           "* Runtime figures are indicative: grep runs in Python loops (not ripgrep binary). **Token counts**",
@@ -220,7 +416,7 @@ def report(root: Path, rows: list[dict]) -> None:
           "* The graph command provides structured answers up front (`--limit`/`--all`). The agent",
           "  may inspect a file afterwards, but already knows the exact file, class, and line number.",
           "* The graph answers *where* and *who*, not *why*. Deep code understanding still involves reading code.",
-          "* Tasks 4 and 5 demonstrate connections that text search cannot resolve (signals in `.tscn`",
+          "* Scene wiring tasks demonstrate connections that text search cannot resolve (signals in `.tscn`",
           "  wired to handlers in `.gd`). The advantage here is not just tokens, but correctness.", ""]
     out.write_text("\n".join(L), encoding="utf-8")
     (root / kg.DB_DIR / "bench.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
