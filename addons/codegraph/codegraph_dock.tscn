@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://addons/codegraph/codegraph_dock.gd" id="1_dock"]
 
-[node name="CodeGraphDock" type="VBoxContainer"]
+[node name="CodeGraphDock" type="PanelContainer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -12,58 +12,149 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("1_dock")
 
-[node name="Toolbar" type="HBoxContainer" parent="."]
+[node name="MainTabs" type="TabContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+current_tab = 0
+
+[node name="SearchTab" type="VBoxContainer" parent="MainTabs"]
+layout_mode = 2
+theme_override_constants/separation = 6
+metadata/_tab_index = 0
+
+[node name="Toolbar" type="HBoxContainer" parent="MainTabs/SearchTab"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ModeOption" type="OptionButton" parent="Toolbar"]
+[node name="ModeOption" type="OptionButton" parent="MainTabs/SearchTab/Toolbar"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 0)
+custom_minimum_size = Vector2(190, 0)
 layout_mode = 2
 
-[node name="SearchInput" type="LineEdit" parent="Toolbar"]
+[node name="SearchInput" type="LineEdit" parent="MainTabs/SearchTab/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "Søk etter symbol, funksjon, klasse..."
+placeholder_text = "Search symbol, function, class, variable..."
 clear_button_enabled = true
 
-[node name="SearchButton" type="Button" parent="Toolbar"]
+[node name="SearchButton" type="Button" parent="MainTabs/SearchTab/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Søk"
+text = "Search"
 
-[node name="VSeparator" type="VSeparator" parent="Toolbar"]
+[node name="VSeparator" type="VSeparator" parent="MainTabs/SearchTab/Toolbar"]
 layout_mode = 2
 
-[node name="HtmlButton" type="Button" parent="Toolbar"]
+[node name="HtmlButton" type="Button" parent="MainTabs/SearchTab/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "🌐 Visuell Graf"
-tooltip_text = "Åpne det interaktive nodekartet i standard nettleser"
+text = "🌐 Web Graph"
 
-[node name="ReindexButton" type="Button" parent="Toolbar"]
+[node name="ReindexButton" type="Button" parent="MainTabs/SearchTab/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "🔄 Reindeks"
-tooltip_text = "Tving fullstendig nybygging av indeksen"
+text = "🔄 Reindex"
 
-[node name="StatusContainer" type="HBoxContainer" parent="."]
+[node name="StatusContainer" type="HBoxContainer" parent="MainTabs/SearchTab"]
 layout_mode = 2
 
-[node name="StatusLabel" type="Label" parent="StatusContainer"]
+[node name="StatusLabel" type="Label" parent="MainTabs/SearchTab/StatusContainer"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 1)
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
 theme_override_font_sizes/font_size = 12
-text = "CodeGraph klar. Velg modus og skriv søkeord."
+text = "CodeGraph ready."
 
-[node name="OutputDisplay" type="RichTextLabel" parent="."]
+[node name="OutputDisplay" type="RichTextLabel" parent="MainTabs/SearchTab"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 2
+theme_override_colors/default_color = Color(0.812, 0.89, 0.961, 1)
 bbcode_enabled = true
 selection_enabled = true
 context_menu_enabled = true
+
+[node name="BenchTab" type="VBoxContainer" parent="MainTabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+metadata/_tab_index = 1
+
+[node name="BenchToolbar" type="HBoxContainer" parent="MainTabs/BenchTab"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BenchButton" type="Button" parent="MainTabs/BenchTab/BenchToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "▶ Run Project Benchmark"
+
+[node name="BenchStatus" type="Label" parent="MainTabs/BenchTab/BenchToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="BenchDisplay" type="RichTextLabel" parent="MainTabs/BenchTab"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 2
+theme_override_colors/default_color = Color(0.812, 0.89, 0.961, 1)
+bbcode_enabled = true
+selection_enabled = true
+context_menu_enabled = true
+
+[node name="WelcomePanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Center" type="CenterContainer" parent="WelcomePanel"]
+layout_mode = 2
+
+[node name="Card" type="VBoxContainer" parent="WelcomePanel/Center"]
+custom_minimum_size = Vector2(480, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="WelcomeTitle" type="Label" parent="WelcomePanel/Center/Card"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 20
+text = "Welcome to CodeGraph"
+horizontal_alignment = 1
+
+[node name="WelcomeDesc" type="Label" parent="WelcomePanel/Center/Card"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+text = "Your project has not been indexed yet. Initial indexing takes only a few seconds and enables instant symbol navigation, scene signal wires, and @rpc mapping."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="IndexNowButton" type="Button" parent="WelcomePanel/Center/Card"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 38)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "⚡ Build Initial Index"
+
+[node name="AutocompletePopup" type="PopupPanel" parent="."]
+unique_name_in_owner = true
+size = Vector2i(320, 180)
+
+[node name="AutocompleteList" type="ItemList" parent="AutocompletePopup"]
+unique_name_in_owner = true
+offset_left = 4.0
+offset_top = 4.0
+offset_right = 316.0
+offset_bottom = 176.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
