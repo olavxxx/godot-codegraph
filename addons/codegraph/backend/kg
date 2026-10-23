@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runner for codegraph on Linux/macOS. Windows brukar kg.bat.
+# Døme:  ./kg callers take_damage
+exec python3 "$(dirname "$0")/graph.py" "$@"

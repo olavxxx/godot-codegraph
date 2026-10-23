@@ -13,7 +13,7 @@ config_version=5
 config/name="Godot CodeGraph"
 config/description="Fast code knowledge graph, symbol navigator, scene signal resolver, and @rpc visualizer for Godot 4."
 config/version="1.0.0"
-config/features=PackedStringArray("4.3", "Forward Plus")
+config/features=PackedStringArray("4.4", "Forward Plus")
 
 [editor_plugins]
 
