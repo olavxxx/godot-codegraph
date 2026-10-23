@@ -6,10 +6,10 @@ Indexerer .gd / .tscn / .tres / .gdshader / project.godot til SQLite
 (.codegraph/graph.db, én per git worktree) og gir presise spørringer i
 stedet for at en agent grep-seger 159 000 linjer.
 
-   python tools/codegraph/graph.py index
-   python tools/codegraph/graph.py callers take_damage
-   python tools/codegraph/graph.py signal mission_completed
-   python tools/codegraph/graph.py html --open
+   python addons/codegraph/backend/graph.py index
+   python addons/codegraph/backend/graph.py callers take_damage
+   python addons/codegraph/backend/graph.py signal mission_completed
+   python addons/codegraph/backend/graph.py html --open
 
 Fremtidig vedlikehold: alle regexer står i R-tabellen under. Endres en
 regel, må fixtures/ få én miniatyrfil som treffer den (kjør `selftest`).
@@ -36,6 +36,15 @@ except Exception:
 
 SCHEMA_VERSION = 12
 DB_DIR = ".codegraph"
+
+# Verktøyet sin eiga mappe, uavhengig av kor det ligg i prosjektet
+# (addons/codegraph/backend/ som plugin, eller tools/codegraph/ som CLI).
+# Addonen ligg éitt steg opp for backend-mappa, så då er det heile addonet
+# som skal halde seg ute av grafen — elles trugar fixture-filene til
+# sjølve spelet i søk og autocomplete når brukaren slår på --addons.
+TOOL_DIR = Path(__file__).resolve().parent
+if TOOL_DIR.name == "backend":
+    TOOL_DIR = TOOL_DIR.parent
 DB_NAME = "graph.db"
 
 INCLUDE_EXT = {".gd", ".tscn", ".tres", ".gdshader"}
@@ -197,12 +206,18 @@ def list_files(root: Path, want_web: bool = False, want_addons: bool = False) ->
     """git ls-files + filwalk, union, bare include-utvidelser og uten EXCLUDE_DIRS."""
     rels: set[str] = set()
 
+    # Eiga backend + testfixtures er ikkje spelkode, sjølv om brukaren slår på --addons.
+    own_rel = ""
+    try:
+        own_rel = TOOL_DIR.relative_to(Path(root).resolve()).as_posix() + "/"
+    except (ValueError, OSError):
+        pass
+
     def keep(rel: str) -> bool:
         parts = rel.replace("\\", "/").split("/")
         if any(p in EXCLUDE_DIRS for p in parts):
             return False
-        # fixtures/ er selvttest-data: skal IKKE indekseres i sjølve prosjektet
-        if rel.startswith("tools/codegraph/fixtures/") and root.name != "fixtures":
+        if own_rel and rel.startswith(own_rel) and root.name != "fixtures":
             return False
         if not want_web and rel.startswith("web/"):
             return False
@@ -1520,7 +1535,7 @@ def cmd_md(con, scope: str | None, budget: int | None, rank: bool, show_signals:
     ranked = sorted(rows, key=lambda r: -(deg.get(r["id"], 0) + info.get(r["file"], {}).get("funcs", 0)))
     if not rank:
         ranked = sorted(rows, key=lambda r: r["file"])
-    out = ["# Repo-kart (generert av tools/codegraph/graph.py — ikkje handredigert)",
+    out = ["# Repo-kart (generert av CodeGraph — graph.py, ikkje handredigert)",
            "kolonar: fil | class | extends | funcs | signaler | scenenoder | script | autoload | grader", ""]
     if show_signals:
         out.append("## Signaler")

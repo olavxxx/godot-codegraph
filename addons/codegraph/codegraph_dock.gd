@@ -609,9 +609,7 @@ func _on_bench_pressed() -> void:
 	bench_button.disabled = true
 	
 	var root_dir = ProjectSettings.globalize_path("res://")
-	var bench_py = ProjectSettings.globalize_path("res://tools/codegraph/bench.py")
-	if not FileAccess.file_exists(bench_py):
-		bench_py = ProjectSettings.globalize_path("res://addons/codegraph/backend/bench.py")
+	var bench_py = ProjectSettings.globalize_path("res://addons/codegraph/backend/bench.py")
 	
 	var output_array: Array = []
 	var start_time = Time.get_ticks_msec()
