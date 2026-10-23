@@ -263,6 +263,11 @@ def open_db(root: Path) -> sqlite3.Connection:
     con = sqlite3.connect(d / DB_NAME)
     con.execute("PRAGMA journal_mode=MEMORY")
     con.execute("PRAGMA foreign_keys=ON")
+    # Ny (eller half tod) database: tabellene må finnast før første spørring.
+    # ensure_fresh les meta-tabellen før index() eventuelt byggjer alt, og
+    # makker ein 0-byte fil utan skjema til sqlite3.OperationalError.
+    if not con.execute("SELECT name FROM sqlite_master WHERE name='nodes'").fetchone():
+        con.executescript(SCHEMA)
     return con
 
 
