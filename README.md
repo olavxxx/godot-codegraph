@@ -1,4 +1,4 @@
-﻿# 🌐 Godot CodeGraph (`kg`)
+# 🌐 Godot CodeGraph (`kg`)
 
 [![Godot Engine](https://img.shields.io/badge/Godot-4.x-blue?logo=godotengine)](https://godotengine.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)

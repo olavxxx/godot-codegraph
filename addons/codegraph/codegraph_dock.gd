@@ -1,4 +1,4 @@
-﻿@tool
+@tool
 extends Control
 
 @onready var search_input: LineEdit = %SearchInput
