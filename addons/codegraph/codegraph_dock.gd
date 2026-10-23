@@ -29,7 +29,7 @@ const KIND_COLORS = {
 const STRINGS = {
 	"en": {
 		"tab_search": "🔍 Search & Explore",
-		"tab_bench": "📊 Benchmark",
+		"tab_bench": "📊 Benchmark & Charts",
 		"mode_find": "Find symbol (find)",
 		"mode_outline": "Outline file/class (outline)",
 		"mode_callers": "Who calls (callers)",
@@ -50,6 +50,7 @@ const STRINGS = {
 		"btn_visual_graph": "🌐 Web Graph",
 		"btn_reindex": "🔄 Reindex",
 		"btn_run_bench": "▶ Run Project Benchmark",
+		"btn_open_json": "📄 Open bench.json",
 		"welcome_title": "Welcome to CodeGraph",
 		"welcome_desc": "Your project has not been indexed yet. Initial indexing takes only a few seconds and enables instant symbol navigation, scene signal wires, and @rpc mapping.",
 		"btn_index_now": "⚡ Build Initial Index",
@@ -62,7 +63,7 @@ const STRINGS = {
 	},
 	"no": {
 		"tab_search": "🔍 Søk & Utforsk",
-		"tab_bench": "📊 Ytelsestest",
+		"tab_bench": "📊 Ytelsestest & Diagram",
 		"mode_find": "Finn symbol (find)",
 		"mode_outline": "Oversikt over fil/autoload (outline)",
 		"mode_callers": "Hvem kaller (callers)",
@@ -83,6 +84,7 @@ const STRINGS = {
 		"btn_visual_graph": "🌐 Web-graf",
 		"btn_reindex": "🔄 Reindeks",
 		"btn_run_bench": "▶ Kjør ytelsestest på dette prosjektet",
+		"btn_open_json": "📄 Åpne bench.json",
 		"welcome_title": "Velkommen til CodeGraph",
 		"welcome_desc": "Dette prosjektet er ikke indeksert ennå. Første indeksering tar bare noen sekunder og gir deg lynrask kode- og signalnavigasjon.",
 		"btn_index_now": "⚡ Bygg indeks nå",
@@ -120,6 +122,7 @@ var lang: String = "en"
 
 # Benchmarkfane
 @onready var bench_button: Button = %BenchButton
+@onready var open_json_button: Button = %OpenJsonButton
 @onready var bench_status: Label = %BenchStatus
 @onready var bench_display: RichTextLabel = %BenchDisplay
 @onready var bench_progress: ProgressBar = %BenchProgress
@@ -135,6 +138,7 @@ func _ready() -> void:
 	_init_python()
 	_setup_ui()
 	_check_indexed_state()
+	_load_existing_bench_chart()
 
 func _detect_language() -> void:
 	lang = "en"
@@ -179,6 +183,7 @@ func _setup_ui() -> void:
 	html_button.text = t("btn_visual_graph")
 	reindex_button.text = t("btn_reindex")
 	bench_button.text = t("btn_run_bench")
+	open_json_button.text = t("btn_open_json")
 	status_label.text = t("ready")
 	bench_status.text = ""
 	
@@ -195,6 +200,7 @@ func _setup_ui() -> void:
 	html_button.pressed.connect(_on_html_pressed)
 	reindex_button.pressed.connect(_on_reindex_pressed)
 	bench_button.pressed.connect(_on_bench_pressed)
+	open_json_button.pressed.connect(_on_open_json_pressed)
 	output_display.meta_clicked.connect(_on_meta_clicked)
 	bench_display.meta_clicked.connect(_on_meta_clicked)
 	
@@ -321,6 +327,7 @@ func _on_html_pressed() -> void:
 	OS.execute(python_cmd, [backend_path, "--path", root_dir, "html", "--open"], out, true)
 	status_label.text = "HTML-graf åpnet i nettleser."
 
+# --- Benchmark & Visuelle Diagrammer ---
 func _on_bench_pressed() -> void:
 	bench_status.text = t("bench_running")
 	bench_display.clear()
@@ -337,11 +344,90 @@ func _on_bench_pressed() -> void:
 	var exit_code = OS.execute(python_cmd, [bench_py, "--path", root_dir], output_array, true)
 	var elapsed = Time.get_ticks_msec() - start_time
 	
-	var raw = output_array[0] if not output_array.is_empty() else ""
-	bench_display.append_text(_format_output_as_bbcode(raw))
-	bench_status.text = t("done_ms") % [elapsed, exit_code]
 	bench_progress.visible = false
 	bench_button.disabled = false
+	bench_status.text = t("done_ms") % [elapsed, exit_code]
+	
+	_load_existing_bench_chart()
+
+func _load_existing_bench_chart() -> void:
+	var json_path = "res://.codegraph/bench.json"
+	if FileAccess.file_exists(json_path):
+		var text = FileAccess.get_file_as_string(json_path)
+		var chart_bb = _format_bench_json_as_charts(text)
+		if not chart_bb.is_empty():
+			bench_display.clear()
+			bench_display.append_text(chart_bb)
+
+func _format_bench_json_as_charts(json_text: String) -> String:
+	var json = JSON.new()
+	if json.parse(json_text) != OK or not (json.data is Array):
+		return ""
+	
+	var rows = json.data
+	if rows.is_empty():
+		return ""
+	
+	var out = "[color=#ffd166][font_size=16][b]═══ BENCHMARK RESULTATER & DIAGRAM ═══[/b][/font_size][/color]\n"
+	out += "[color=#6d8296]Lagret automatisk til: [url=res://.codegraph/bench.json][color=#4fb3ff].codegraph/bench.json[/color][/url] · [url=res://.codegraph/bench.md][color=#4fb3ff]bench.md[/color][/url][/color]\n\n"
+	
+	var total_grep_tok = 0
+	var total_kg_tok = 0
+	var total_grep_ms = 0.0
+	var total_kg_ms = 0.0
+	var won = 0
+	
+	for r in rows:
+		total_grep_tok += int(r.get("grep_dugleg_token", 0))
+		total_kg_tok += int(r.get("graf_token", 0))
+		total_grep_ms += float(r.get("grep_dugleg_ms", 0.0))
+		total_kg_ms += float(r.get("graf_ms_varm", 0.0))
+		if int(r.get("graf_token", 0)) <= int(r.get("grep_dugleg_token", 0)):
+			won += 1
+	
+	var time_saved_pct = round(100.0 * (total_grep_ms - total_kg_ms) / max(total_grep_ms, 0.001))
+	var token_saved_pct = round(100.0 * (total_grep_tok - total_kg_tok) / max(total_grep_tok, 0.001))
+	
+	# KPI Oppsummering
+	out += "[table=3]"
+	out += "[cell][color=#ffd166][b]⚡ SPART TID[/b][/color]\n[color=#8ce56c][font_size=16][b]%d%% raskere[/b][/font_size][/color]\n[color=#6d8296]%.1f ms mot %.1f ms[/color][/cell]" % [time_saved_pct, total_kg_ms, total_grep_ms]
+	out += "[cell][color=#ffd166][b]🪙 SPART TOKENS[/b][/color]\n[color=#8ce56c][font_size=16][b]%d%% færre[/b][/font_size][/color]\n[color=#6d8296]%d mot %d tokens[/color][/cell]" % [token_saved_pct, total_kg_tok, total_grep_tok]
+	out += "[cell][color=#ffd166][b]🏆 KVALITET / VUNNET[/b][/color]\n[color=#4fb3ff][font_size=16][b]%d av %d oppgaver[/b][/font_size][/color]\n[color=#6d8296]Presise referanser[/color][/cell]" % [won, rows.size()]
+	out += "[/table]\n\n"
+	out += "[color=#1d2b3a]──────────────────────────────────────────────────────────────────────────────[/color]\n\n"
+	
+	# Visuelle søyler per oppgave
+	for r in rows:
+		var spm = r.get("spm", "")
+		var id = r.get("id", 0)
+		var g_tok = int(r.get("grep_dugleg_token", 0))
+		var k_tok = int(r.get("graf_token", 0))
+		var g_ms = float(r.get("grep_dugleg_ms", 0.0))
+		var k_ms = float(r.get("graf_ms_varm", 0.0))
+		var ratio = r.get("token_ratio", 1.0)
+		
+		var max_tok = max(g_tok, k_tok, 1)
+		var bar_len = 26
+		var g_bars = max(1, int(float(g_tok) / max_tok * bar_len))
+		var k_bars = max(1, int(float(k_tok) / max_tok * bar_len))
+		
+		var g_bar_str = "█".repeat(g_bars)
+		var k_bar_str = "█".repeat(k_bars)
+		
+		var win_badge = "[color=#8ce56c][b]✓ CodeGraph vinner (" + str(ratio) + "×)[/b][/color]" if k_tok <= g_tok else "[color=#ef767a][b]Grep vinner[/b][/color]"
+		
+		out += "[b][color=#cfe3f5]#%d %s[/color][/b]  %s\n" % [id, spm, win_badge]
+		out += "  [color=#6d8296]Grep (dyktig):[/color] [color=#ef767a]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n" % [g_bar_str, g_tok, g_ms]
+		out += "  [color=#4fb3ff]CodeGraph:    [/color] [color=#4fb3ff]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n\n" % [k_bar_str, k_tok, k_ms]
+	
+	return out
+
+func _on_open_json_pressed() -> void:
+	var json_path = ProjectSettings.globalize_path("res://.codegraph/bench.json")
+	if FileAccess.file_exists("res://.codegraph/bench.json"):
+		OS.shell_open(json_path)
+	else:
+		bench_status.text = "Ingen bench.json funnet ennå. Kjør testen først!"
 
 func _run_codegraph(subargs: Array[String]) -> void:
 	status_label.text = t("indexing")
@@ -370,17 +456,14 @@ func _run_codegraph(subargs: Array[String]) -> void:
 func _format_output_as_bbcode(raw: String) -> String:
 	var bb = raw.replace("[", "[lb]").replace("]", "[rb]")
 	
-	# Fargelegg kind-etiketter med de lekre pill-fargene fra HTML-visningen
 	for kind in KIND_COLORS.keys():
 		var col = KIND_COLORS[kind]
 		bb = bb.replace(kind + " ", "[color=" + col + "][b]" + kind + "[/b][/color] ")
 		bb = bb.replace(kind + "\t", "[color=" + col + "][b]" + kind + "[/b][/color]\t")
 	
-	# Hot / Golden tags
 	bb = bb.replace("[lb]rpc[rb]", "[color=#ffd166][b][rpc][/b][/color]")
 	bb = bb.replace("[lb]export[rb]", "[color=#4fb3ff][b][export][/b][/color]")
 	
-	# Regex for å gjøre filbaner klikkbare
 	var file_regex = RegEx.new()
 	file_regex.compile(r"([A-Za-z0-9_\-\./]+\.(?:gd|tscn|tres)):([0-9]+)")
 	
