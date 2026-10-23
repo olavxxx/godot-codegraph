@@ -25,7 +25,19 @@ const KIND_COLORS = {
 	"shader": "#66d9b1"
 }
 
-# --- Lokalisering (i18n) ---
+# Bokmål-oversettelse av oppgavene i benchmarken
+const TASK_NAMES_NO = {
+	1: "Hvem emitterer mission_completed, og hvem lytter?",
+	2: "Filoversikt over BeatMakerUI.gd uten å åpne filen",
+	3: "Hvem kaller take_damage?",
+	4: "Hvilke scenetilkoblinger går til close()?",
+	5: "Hvem mottar pressed i .tscn-filer?",
+	6: "Hvor finnes @rpc-funksjoner, og hvem kaller dem?",
+	7: "Hva påvirkes av å endre GameState?",
+	8: "Hvem bruker 'civilians'-gruppen?"
+}
+
+# --- Lokalisering (i18n): Engelsk (standard) & Norsk (Bokmål) ---
 const STRINGS = {
 	"en": {
 		"tab_search": "🔍 Search & Explore",
@@ -59,13 +71,28 @@ const STRINGS = {
 		"bench_running": "Running real-world benchmark against grep...",
 		"done_ms": "Completed in %d ms (exit %d)",
 		"err_python": "Warning: Python 3 was not found in PATH. Please install Python 3.",
-		"enter_term": "Please enter a search term."
+		"enter_term": "Please enter a search term.",
+		"bench_title": "═══ BENCHMARK RESULTS & CHARTS ═══",
+		"bench_saved": "Saved automatically to:",
+		"bench_time": "⚡ TIME SAVED",
+		"bench_time_sub": "%d%% faster",
+		"bench_time_detail": "%.1f ms vs %.1f ms",
+		"bench_tokens": "🪙 TOKENS SAVED",
+		"bench_tokens_sub": "%d%% fewer",
+		"bench_tokens_detail": "%d vs %d tokens",
+		"bench_won": "🏆 QUALITY / WON",
+		"bench_won_sub": "%d of %d tasks",
+		"bench_won_detail": "Precise cross-references",
+		"bench_grep": "Grep (competent)",
+		"bench_kg": "CodeGraph",
+		"bench_win_badge": "✓ CodeGraph wins (%s×)",
+		"bench_lose_badge": "Grep wins"
 	},
 	"no": {
 		"tab_search": "🔍 Søk & Utforsk",
 		"tab_bench": "📊 Ytelsestest & Diagram",
 		"mode_find": "Finn symbol (find)",
-		"mode_outline": "Oversikt over fil/autoload (outline)",
+		"mode_outline": "Oversikt (outline)",
 		"mode_callers": "Hvem kaller (callers)",
 		"mode_signal": "Signalsporing (signal)",
 		"mode_rpc": "Nettverkskall (@rpc)",
@@ -74,26 +101,41 @@ const STRINGS = {
 		"mode_status": "Status & tellere (status)",
 		"hint_find": "Søk etter funksjon, signal, klasse eller variabel...",
 		"hint_outline": "Navn på script, klasse eller autoload...",
-		"hint_callers": "Navn på funksjon som blir kalt...",
+		"hint_callers": "Navn på funksjon som kalles...",
 		"hint_signal": "Navn på signal...",
 		"hint_rpc": "Valgfritt filter for RPC-funksjoner...",
-		"hint_impact": "Symbol eller klasse du vil sjekke påvirkning av...",
+		"hint_impact": "Symbol eller klasse du vil undersøke...",
 		"hint_deps": "Filsti for å se avhengigheter...",
-		"hint_status": "Trykk Søk for status",
+		"hint_status": "Klikk Søk for status",
 		"btn_search": "Søk",
-		"btn_visual_graph": "🌐 Web-graf",
-		"btn_reindex": "🔄 Reindeks",
+		"btn_visual_graph": "🌐 Nett-graf",
+		"btn_reindex": "🔄 Reindekser",
 		"btn_run_bench": "▶ Kjør ytelsestest på dette prosjektet",
 		"btn_open_json": "📄 Åpne bench.json",
 		"welcome_title": "Velkommen til CodeGraph",
 		"welcome_desc": "Dette prosjektet er ikke indeksert ennå. Første indeksering tar bare noen sekunder og gir deg lynrask kode- og signalnavigasjon.",
 		"btn_index_now": "⚡ Bygg indeks nå",
-		"ready": "CodeGraph klar. Velg modus og skriv søkeord.",
+		"ready": "CodeGraph klar. Velg modus og skriv inn søkeord.",
 		"indexing": "Indekserer prosjektet...",
 		"bench_running": "Kjører ytelsestest mot grep...",
 		"done_ms": "Ferdig på %d ms (exit %d)",
-		"err_python": "Advarsel: Python 3 ble ikke funnet i PATH. Installer Python 3.",
-		"enter_term": "Vennligst skriv inn et søkeord."
+		"err_python": "Advarsel: Python 3 ble ikke funnet i PATH. Vennligst installer Python 3.",
+		"enter_term": "Vennligst oppgi et søkeord.",
+		"bench_title": "═══ BENCHMARK-RESULTATER & DIAGRAM ═══",
+		"bench_saved": "Lagret automatisk til:",
+		"bench_time": "⚡ SPART TID",
+		"bench_time_sub": "%d%% raskere",
+		"bench_time_detail": "%.1f ms mot %.1f ms",
+		"bench_tokens": "🪙 SPARTE TOKENS",
+		"bench_tokens_sub": "%d%% færre",
+		"bench_tokens_detail": "%d mot %d tokens",
+		"bench_won": "🏆 KVALITET / VUNNET",
+		"bench_won_sub": "%d av %d oppgaver",
+		"bench_won_detail": "Presise referanser",
+		"bench_grep": "Grep (dyktig)",
+		"bench_kg": "CodeGraph",
+		"bench_win_badge": "✓ CodeGraph vinner (%s×)",
+		"bench_lose_badge": "Grep vinner"
 	}
 }
 
@@ -114,6 +156,7 @@ var lang: String = "en"
 @onready var search_button: Button = %SearchButton
 @onready var html_button: Button = %HtmlButton
 @onready var reindex_button: Button = %ReindexButton
+@onready var lang_button: Button = %LangButton
 @onready var status_label: Label = %StatusLabel
 @onready var output_display: RichTextLabel = %OutputDisplay
 @onready var autocomplete_popup: PopupPanel = %AutocompletePopup
@@ -123,6 +166,7 @@ var lang: String = "en"
 # Benchmarkfane
 @onready var bench_button: Button = %BenchButton
 @onready var open_json_button: Button = %OpenJsonButton
+@onready var bench_lang_button: Button = %BenchLangButton
 @onready var bench_status: Label = %BenchStatus
 @onready var bench_display: RichTextLabel = %BenchDisplay
 @onready var bench_progress: ProgressBar = %BenchProgress
@@ -134,20 +178,40 @@ var index_thread: Thread = null
 var poll_timer: Timer = null
 
 func _ready() -> void:
-	_detect_language()
+	_load_language_preference()
 	_init_python()
 	_setup_ui()
 	_check_indexed_state()
 	_load_existing_bench_chart()
 
-func _detect_language() -> void:
+func _load_language_preference() -> void:
+	# Sjekk lagret preferanse først
+	var lang_file = "res://.codegraph/lang.txt"
+	if FileAccess.file_exists(lang_file):
+		var saved = FileAccess.get_file_as_string(lang_file).strip_edges().to_lower()
+		if saved in ["en", "no"]:
+			lang = saved
+			return
+	
+	# Standard er alltid engelsk med mindre editoren eksplisitt har norsk Bokmål
 	lang = "en"
 	if Engine.is_editor_hint():
 		var settings = EditorInterface.get_editor_settings()
 		if settings:
-			var editor_lang = str(settings.get_setting("interface/editor/editor_language"))
-			if editor_lang.begins_with("no") or editor_lang.begins_with("nb") or editor_lang.begins_with("nn"):
+			var editor_lang = str(settings.get_setting("interface/editor/editor_language")).to_lower()
+			if editor_lang == "nb" or editor_lang == "no" or editor_lang.begins_with("nb_") or editor_lang.begins_with("no_"):
 				lang = "no"
+
+func _toggle_language() -> void:
+	lang = "no" if lang == "en" else "en"
+	var lang_file = "res://.codegraph/lang.txt"
+	var f = FileAccess.open(lang_file, FileAccess.WRITE)
+	if f:
+		f.store_string(lang)
+		f.close()
+	
+	_setup_ui()
+	_load_existing_bench_chart()
 
 func t(key: String) -> String:
 	var dict = STRINGS.get(lang, STRINGS["en"])
@@ -168,11 +232,21 @@ func _setup_ui() -> void:
 	main_tabs.set_tab_title(0, t("tab_search"))
 	main_tabs.set_tab_title(1, t("tab_bench"))
 	
+	# Språkknapp
+	lang_button.text = "🌐 " + lang.to_upper()
+	if not lang_button.pressed.is_connected(_toggle_language):
+		lang_button.pressed.connect(_toggle_language)
+	if bench_lang_button:
+		bench_lang_button.text = "🌐 " + lang.to_upper()
+		if not bench_lang_button.pressed.is_connected(_toggle_language):
+			bench_lang_button.pressed.connect(_toggle_language)
+	
 	# Velkomstskjerm
 	welcome_title.text = t("welcome_title")
 	welcome_desc.text = t("welcome_desc")
 	index_now_button.text = t("btn_index_now")
-	index_now_button.pressed.connect(_on_index_now_pressed)
+	if not index_now_button.pressed.is_connected(_on_index_now_pressed):
+		index_now_button.pressed.connect(_on_index_now_pressed)
 	welcome_progress.visible = false
 	welcome_status.visible = false
 	search_progress.visible = false
@@ -188,26 +262,44 @@ func _setup_ui() -> void:
 	bench_status.text = ""
 	
 	# Modusliste
+	var cur_mode = mode_option.selected if mode_option.item_count > 0 else 0
 	mode_option.clear()
 	var modes = ["find", "outline", "callers", "signal", "rpc", "impact", "deps", "status"]
 	for m in modes:
 		mode_option.add_item(t("mode_" + m))
 	
-	mode_option.item_selected.connect(_on_mode_selected)
-	search_button.pressed.connect(_on_search_pressed)
-	search_input.text_submitted.connect(func(_text): _on_search_pressed())
-	search_input.text_changed.connect(_on_search_text_changed)
-	html_button.pressed.connect(_on_html_pressed)
-	reindex_button.pressed.connect(_on_reindex_pressed)
-	bench_button.pressed.connect(_on_bench_pressed)
-	open_json_button.pressed.connect(_on_open_json_pressed)
-	output_display.meta_clicked.connect(_on_meta_clicked)
-	bench_display.meta_clicked.connect(_on_meta_clicked)
+	if cur_mode >= 0 and cur_mode < mode_option.item_count:
+		mode_option.selected = cur_mode
+	
+	if not mode_option.item_selected.is_connected(_on_mode_selected):
+		mode_option.item_selected.connect(_on_mode_selected)
+	if not search_button.pressed.is_connected(_on_search_pressed):
+		search_button.pressed.connect(_on_search_pressed)
+	if not search_input.text_submitted.is_connected(_on_search_submitted):
+		search_input.text_submitted.connect(_on_search_submitted)
+	if not search_input.text_changed.is_connected(_on_search_text_changed):
+		search_input.text_changed.connect(_on_search_text_changed)
+	if not html_button.pressed.is_connected(_on_html_pressed):
+		html_button.pressed.connect(_on_html_pressed)
+	if not reindex_button.pressed.is_connected(_on_reindex_pressed):
+		reindex_button.pressed.connect(_on_reindex_pressed)
+	if not bench_button.pressed.is_connected(_on_bench_pressed):
+		bench_button.pressed.connect(_on_bench_pressed)
+	if not open_json_button.pressed.is_connected(_on_open_json_pressed):
+		open_json_button.pressed.connect(_on_open_json_pressed)
+	if not output_display.meta_clicked.is_connected(_on_meta_clicked):
+		output_display.meta_clicked.connect(_on_meta_clicked)
+	if not bench_display.meta_clicked.is_connected(_on_meta_clicked):
+		bench_display.meta_clicked.connect(_on_meta_clicked)
 	
 	# Autocomplete setup
-	autocomplete_list.item_selected.connect(_on_autocomplete_selected)
+	if not autocomplete_list.item_selected.is_connected(_on_autocomplete_selected):
+		autocomplete_list.item_selected.connect(_on_autocomplete_selected)
 	
-	_on_mode_selected(0)
+	_on_mode_selected(mode_option.selected)
+
+func _on_search_submitted(_text: String) -> void:
+	_on_search_pressed()
 
 func _check_indexed_state() -> void:
 	var db_path = ProjectSettings.globalize_path("res://.codegraph/graph.db")
@@ -327,7 +419,7 @@ func _on_html_pressed() -> void:
 	OS.execute(python_cmd, [backend_path, "--path", root_dir, "html", "--open"], out, true)
 	status_label.text = "HTML-graf åpnet i nettleser."
 
-# --- Benchmark & Visuelle Diagrammer ---
+# --- Benchmark & Visuelle Diagrammer (Støtter Engelsk og Bokmål) ---
 func _on_bench_pressed() -> void:
 	bench_status.text = t("bench_running")
 	bench_display.clear()
@@ -368,8 +460,10 @@ func _format_bench_json_as_charts(json_text: String) -> String:
 	if rows.is_empty():
 		return ""
 	
-	var out = "[color=#ffd166][font_size=16][b]═══ BENCHMARK RESULTATER & DIAGRAM ═══[/b][/font_size][/color]\n"
-	out += "[color=#6d8296]Lagret automatisk til: [url=res://.codegraph/bench.json][color=#4fb3ff].codegraph/bench.json[/color][/url] · [url=res://.codegraph/bench.md][color=#4fb3ff]bench.md[/color][/url][/color]\n\n"
+	var is_no = (lang == "no")
+	
+	var out = "[color=#ffd166][font_size=16][b]%s[/b][/font_size][/color]\n" % t("bench_title")
+	out += "[color=#6d8296]%s [url=res://.codegraph/bench.json][color=#4fb3ff].codegraph/bench.json[/color][/url] · [url=res://.codegraph/bench.md][color=#4fb3ff]bench.md[/color][/url][/color]\n\n" % t("bench_saved")
 	
 	var total_grep_tok = 0
 	var total_kg_tok = 0
@@ -390,16 +484,19 @@ func _format_bench_json_as_charts(json_text: String) -> String:
 	
 	# KPI Oppsummering
 	out += "[table=3]"
-	out += "[cell][color=#ffd166][b]⚡ SPART TID[/b][/color]\n[color=#8ce56c][font_size=16][b]%d%% raskere[/b][/font_size][/color]\n[color=#6d8296]%.1f ms mot %.1f ms[/color][/cell]" % [time_saved_pct, total_kg_ms, total_grep_ms]
-	out += "[cell][color=#ffd166][b]🪙 SPART TOKENS[/b][/color]\n[color=#8ce56c][font_size=16][b]%d%% færre[/b][/font_size][/color]\n[color=#6d8296]%d mot %d tokens[/color][/cell]" % [token_saved_pct, total_kg_tok, total_grep_tok]
-	out += "[cell][color=#ffd166][b]🏆 KVALITET / VUNNET[/b][/color]\n[color=#4fb3ff][font_size=16][b]%d av %d oppgaver[/b][/font_size][/color]\n[color=#6d8296]Presise referanser[/color][/cell]" % [won, rows.size()]
+	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#8ce56c][font_size=16][b]%s[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_time"), t("bench_time_sub") % time_saved_pct, t("bench_time_detail") % [total_kg_ms, total_grep_ms]]
+	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#8ce56c][font_size=16][b]%s[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_tokens"), t("bench_tokens_sub") % token_saved_pct, t("bench_tokens_detail") % [total_kg_tok, total_grep_tok]]
+	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#4fb3ff][font_size=16][b]%s[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_won"), t("bench_won_sub") % [won, rows.size()], t("bench_won_detail")]
 	out += "[/table]\n\n"
 	out += "[color=#1d2b3a]──────────────────────────────────────────────────────────────────────────────[/color]\n\n"
 	
 	# Visuelle søyler per oppgave
 	for r in rows:
+		var id = int(r.get("id", 0))
 		var spm = r.get("spm", "")
-		var id = r.get("id", 0)
+		if is_no and TASK_NAMES_NO.has(id):
+			spm = TASK_NAMES_NO[id]
+		
 		var g_tok = int(r.get("grep_dugleg_token", 0))
 		var k_tok = int(r.get("graf_token", 0))
 		var g_ms = float(r.get("grep_dugleg_ms", 0.0))
@@ -414,11 +511,11 @@ func _format_bench_json_as_charts(json_text: String) -> String:
 		var g_bar_str = "█".repeat(g_bars)
 		var k_bar_str = "█".repeat(k_bars)
 		
-		var win_badge = "[color=#8ce56c][b]✓ CodeGraph vinner (" + str(ratio) + "×)[/b][/color]" if k_tok <= g_tok else "[color=#ef767a][b]Grep vinner[/b][/color]"
+		var win_badge = ("[color=#8ce56c][b]" + t("bench_win_badge") + "[/b][/color]") % str(ratio) if k_tok <= g_tok else ("[color=#ef767a][b]" + t("bench_lose_badge") + "[/b][/color]")
 		
 		out += "[b][color=#cfe3f5]#%d %s[/color][/b]  %s\n" % [id, spm, win_badge]
-		out += "  [color=#6d8296]Grep (dyktig):[/color] [color=#ef767a]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n" % [g_bar_str, g_tok, g_ms]
-		out += "  [color=#4fb3ff]CodeGraph:    [/color] [color=#4fb3ff]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n\n" % [k_bar_str, k_tok, k_ms]
+		out += "  [color=#6d8296]%s:[/color] [color=#ef767a]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n" % [t("bench_grep"), g_bar_str, g_tok, g_ms]
+		out += "  [color=#4fb3ff]%s:    [/color] [color=#4fb3ff]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n\n" % [t("bench_kg"), k_bar_str, k_tok, k_ms]
 	
 	return out
 
@@ -427,7 +524,7 @@ func _on_open_json_pressed() -> void:
 	if FileAccess.file_exists("res://.codegraph/bench.json"):
 		OS.shell_open(json_path)
 	else:
-		bench_status.text = "Ingen bench.json funnet ennå. Kjør testen først!"
+		bench_status.text = "No bench.json found yet. Run benchmark first!"
 
 func _run_codegraph(subargs: Array[String]) -> void:
 	status_label.text = t("indexing")

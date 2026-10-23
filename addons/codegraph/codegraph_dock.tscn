@@ -56,6 +56,14 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "🔄 Reindex"
 
+[node name="VSeparator2" type="VSeparator" parent="MainTabs/SearchTab/Toolbar"]
+layout_mode = 2
+
+[node name="LangButton" type="Button" parent="MainTabs/SearchTab/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "🌐 EN"
+
 [node name="SearchProgress" type="ProgressBar" parent="MainTabs/SearchTab"]
 unique_name_in_owner = true
 visible = false
@@ -103,6 +111,11 @@ text = "▶ Run Project Benchmark"
 unique_name_in_owner = true
 layout_mode = 2
 text = "📄 Open bench.json"
+
+[node name="BenchLangButton" type="Button" parent="MainTabs/BenchTab/BenchToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "🌐 EN"
 
 [node name="BenchStatus" type="Label" parent="MainTabs/BenchTab/BenchToolbar"]
 unique_name_in_owner = true
