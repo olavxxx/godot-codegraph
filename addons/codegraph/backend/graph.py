@@ -645,8 +645,26 @@ def index(root: Path, force: bool = False, want_web: bool = False, want_addons: 
     for rel in gone:
         con.execute("DELETE FROM files WHERE path=?", (rel,))
 
+    prog_file = root / DB_DIR / "progress.json"
+    def write_prog(phase: str, current: int, total: int, msg: str = "", pct: int = 0):
+        try:
+            prog_file.parent.mkdir(parents=True, exist_ok=True)
+            prog_file.write_text(json.dumps({
+                "phase": phase, "current": current, "total": total,
+                "msg": msg, "pct": pct
+            }), encoding="utf-8")
+        except Exception:
+            pass
+
+    to_process = added + changed
+    total_files = len(to_process)
+    write_prog("start", 0, total_files, "Starter indeksering...", 0)
+
     parse_errors = 0
-    for rel in added + changed:
+    for idx, rel in enumerate(to_process, 1):
+        if idx % 5 == 0 or idx == total_files:
+            pct = int((idx / max(1, total_files)) * 80)
+            write_prog("parsing", idx, total_files, rel, pct)
         fp = root / rel
         try:
             text = fp.read_text(encoding="utf-8-sig", errors="replace")
@@ -687,8 +705,15 @@ def index(root: Path, force: bool = False, want_web: bool = False, want_addons: 
                         (rel, r["kind"], r.get("name"), r.get("receiver"), r.get("arg"), r.get("path"),
                          r["line"], r.get("owner")))
 
+    write_prog("resolving", total_files, total_files, "Løser kryssreferanser, signaler og @rpc...", 85)
     resolve(con)
+    write_prog("search", total_files, total_files, "Bygger søkeindeks...", 95)
     rebuild_search(con)
+    write_prog("done", total_files, total_files, "Ferdig!", 100)
+    try:
+        prog_file.unlink(missing_ok=True)
+    except Exception:
+        pass
     now = time.strftime("%Y-%m-%d %H:%M:%S")
     con.execute("INSERT INTO meta(k,v) VALUES('indexed_at',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (now,))
     con.execute("INSERT INTO meta(k,v) VALUES('checked_at',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (now,))

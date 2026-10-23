@@ -54,7 +54,7 @@ const STRINGS = {
 		"welcome_desc": "Your project has not been indexed yet. Initial indexing takes only a few seconds and enables instant symbol navigation, scene signal wires, and @rpc mapping.",
 		"btn_index_now": "⚡ Build Initial Index",
 		"ready": "CodeGraph ready. Select a mode and search.",
-		"indexing": "Indexing project in progress...",
+		"indexing": "Indexing in progress...",
 		"bench_running": "Running real-world benchmark against grep...",
 		"done_ms": "Completed in %d ms (exit %d)",
 		"err_python": "Warning: Python 3 was not found in PATH. Please install Python 3.",
@@ -103,6 +103,8 @@ var lang: String = "en"
 @onready var welcome_title: Label = %WelcomeTitle
 @onready var welcome_desc: Label = %WelcomeDesc
 @onready var index_now_button: Button = %IndexNowButton
+@onready var welcome_progress: ProgressBar = %WelcomeProgress
+@onready var welcome_status: Label = %WelcomeStatus
 
 # Søkefane
 @onready var search_input: LineEdit = %SearchInput
@@ -114,16 +116,19 @@ var lang: String = "en"
 @onready var output_display: RichTextLabel = %OutputDisplay
 @onready var autocomplete_popup: PopupPanel = %AutocompletePopup
 @onready var autocomplete_list: ItemList = %AutocompleteList
+@onready var search_progress: ProgressBar = %SearchProgress
 
 # Benchmarkfane
 @onready var bench_button: Button = %BenchButton
 @onready var bench_status: Label = %BenchStatus
 @onready var bench_display: RichTextLabel = %BenchDisplay
+@onready var bench_progress: ProgressBar = %BenchProgress
 
 var python_cmd: String = "python"
 var backend_path: String = ""
 var symbol_cache: Array[Dictionary] = []
-var is_indexing: bool = false
+var index_thread: Thread = null
+var poll_timer: Timer = null
 
 func _ready() -> void:
 	_detect_language()
@@ -164,6 +169,10 @@ func _setup_ui() -> void:
 	welcome_desc.text = t("welcome_desc")
 	index_now_button.text = t("btn_index_now")
 	index_now_button.pressed.connect(_on_index_now_pressed)
+	welcome_progress.visible = false
+	welcome_status.visible = false
+	search_progress.visible = false
+	bench_progress.visible = false
 	
 	# Knapper
 	search_button.text = t("btn_search")
@@ -209,12 +218,84 @@ func _on_mode_selected(idx: int) -> void:
 	if idx >= 0 and idx < modes.size():
 		search_input.placeholder_text = t("hint_" + modes[idx])
 
+# --- Asynkron indeksering med levende ProgressBar ---
 func _on_index_now_pressed() -> void:
-	welcome_desc.text = t("indexing")
-	index_now_button.disabled = true
-	_run_codegraph(["index", "--force"])
-	_check_indexed_state()
-	index_now_button.disabled = false
+	_start_async_index(["index", "--force"], true)
+
+func _on_reindex_pressed() -> void:
+	_start_async_index(["index", "--force"], false)
+
+func _start_async_index(args: Array[String], is_welcome: bool) -> void:
+	if index_thread and index_thread.is_alive():
+		return
+	
+	if is_welcome:
+		welcome_progress.value = 0
+		welcome_progress.visible = true
+		welcome_status.visible = true
+		welcome_status.text = t("indexing")
+		index_now_button.visible = false
+	else:
+		search_progress.value = 0
+		search_progress.visible = true
+		reindex_button.disabled = true
+		status_label.text = t("indexing")
+	
+	index_thread = Thread.new()
+	index_thread.start(_run_index_worker.bind(args))
+	
+	if not poll_timer:
+		poll_timer = Timer.new()
+		poll_timer.wait_time = 0.08
+		poll_timer.timeout.connect(_on_poll_progress.bind(is_welcome))
+		add_child(poll_timer)
+	poll_timer.start()
+
+func _run_index_worker(subargs: Array[String]) -> void:
+	var root_dir = ProjectSettings.globalize_path("res://")
+	var full_args = [backend_path, "--path", root_dir]
+	full_args.append_array(subargs)
+	var out: Array = []
+	OS.execute(python_cmd, full_args, out, true)
+
+func _on_poll_progress(is_welcome: bool) -> void:
+	var prog_file = "res://.codegraph/progress.json"
+	if FileAccess.file_exists(prog_file):
+		var text = FileAccess.get_file_as_string(prog_file)
+		var json = JSON.new()
+		if json.parse(text) == OK and json.data is Dictionary:
+			var d = json.data
+			var pct = d.get("pct", 0)
+			var cur = d.get("current", 0)
+			var tot = d.get("total", 0)
+			var msg = d.get("msg", "")
+			
+			if is_welcome:
+				welcome_progress.value = pct
+				if d.get("phase") == "parsing":
+					welcome_status.text = "%d / %d (%d%%) — %s" % [cur, tot, pct, msg]
+				else:
+					welcome_status.text = "%d%% — %s" % [pct, msg]
+			else:
+				search_progress.value = pct
+				if d.get("phase") == "parsing":
+					status_label.text = "%d / %d (%d%%) — %s" % [cur, tot, pct, msg]
+				else:
+					status_label.text = "%d%% — %s" % [pct, msg]
+	
+	if index_thread and not index_thread.is_alive():
+		index_thread.wait_to_finish()
+		index_thread = null
+		if poll_timer:
+			poll_timer.stop()
+		
+		welcome_progress.visible = false
+		welcome_status.visible = false
+		search_progress.visible = false
+		index_now_button.visible = true
+		reindex_button.disabled = false
+		status_label.text = t("ready")
+		_check_indexed_state()
 
 func _on_search_pressed() -> void:
 	autocomplete_popup.hide()
@@ -233,10 +314,6 @@ func _on_search_pressed() -> void:
 	
 	_run_codegraph(args)
 
-func _on_reindex_pressed() -> void:
-	_run_codegraph(["index", "--force"])
-	_load_symbol_cache()
-
 func _on_html_pressed() -> void:
 	var out: Array = []
 	status_label.text = t("indexing")
@@ -247,6 +324,9 @@ func _on_html_pressed() -> void:
 func _on_bench_pressed() -> void:
 	bench_status.text = t("bench_running")
 	bench_display.clear()
+	bench_progress.visible = true
+	bench_button.disabled = true
+	
 	var root_dir = ProjectSettings.globalize_path("res://")
 	var bench_py = ProjectSettings.globalize_path("res://tools/codegraph/bench.py")
 	if not FileAccess.file_exists(bench_py):
@@ -260,6 +340,8 @@ func _on_bench_pressed() -> void:
 	var raw = output_array[0] if not output_array.is_empty() else ""
 	bench_display.append_text(_format_output_as_bbcode(raw))
 	bench_status.text = t("done_ms") % [elapsed, exit_code]
+	bench_progress.visible = false
+	bench_button.disabled = false
 
 func _run_codegraph(subargs: Array[String]) -> void:
 	status_label.text = t("indexing")
@@ -337,7 +419,6 @@ func _load_symbol_cache() -> void:
 	symbol_cache.clear()
 	var root_dir = ProjectSettings.globalize_path("res://")
 	var out: Array = []
-	# Hent en kompakt liste med de vanligste symbolene
 	var py_script = "import sqlite3, json, sys; con = sqlite3.connect('.codegraph/graph.db'); rows = con.execute('SELECT DISTINCT name, kind FROM nodes WHERE kind IN (\"class\",\"fn\",\"signal\",\"autoload\") LIMIT 3500').fetchall(); print(json.dumps([{'n':r[0],'k':r[1]} for r in rows]))"
 	var ec = OS.execute(python_cmd, ["-c", py_script], out, true)
 	if ec == 0 and not out.is_empty():
@@ -374,7 +455,6 @@ func _on_search_text_changed(new_text: String) -> void:
 
 func _on_autocomplete_selected(index: int) -> void:
 	var item_text = autocomplete_list.get_item_text(index)
-	# Format: [kind] name
 	if "] " in item_text:
 		var parts = item_text.split("] ")
 		search_input.text = parts[1]
