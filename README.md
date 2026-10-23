@@ -1,6 +1,6 @@
 # 🌐 Godot CodeGraph (`kg`)
 
-[![Godot Engine](https://img.shields.io/badge/Godot-4.x-blue?logo=godotengine)](https://godotengine.org)
+[![Godot Engine](https://img.shields.io/badge/Godot-4.4%2B-blue?logo=godotengine)](https://godotengine.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-yellow.svg?logo=python)](https://python.org)
 
@@ -94,7 +94,23 @@ python addons/codegraph/backend/graph.py impact GameState --depth 2
 python addons/codegraph/backend/graph.py html --open
 ```
 
-*(On Windows, you can also use `addons\codegraph\backend\kg.bat <command>`).*
+*(Windows: `addons\codegraph\backend\kg.bat <command>` · Linux/macOS: `./addons/codegraph/backend/kg <command>`).*
+
+Every query re-checks file hashes first, so the index is never stale and no background watcher is needed. The index lives in `.codegraph/graph.db` at your project root.
+
+### Output built for AI agents
+
+`callers`, `impact`, `deps` and friends print a **count summary first**, then group hits per file (`scripts/combat/Bullet.gd — 4 calls at L23, L55, ...`). Pass `--all` for one edge per line. Third-party code is out of the way by default:
+
+| Flag | Effect |
+|---|---|
+| *(default)* | `addons/` and `web/` are **excluded** — the graph is your game logic |
+| `--addons` | include `addons/` (also use it if your own code lives there) |
+| `--web` | include a JS/`web/` app |
+| `--limit N` / `--all` | trim or expand one query |
+| `--path DIR` | point at any project root |
+
+`kg symbols` dumps the symbol list as JSON (this is what the editor's autocomplete reads), and `kg verify` runs reindex + the parser selftest — handy in CI.
 
 ### Self-Refreshing Index
 CodeGraph automatically checks file hashes (`.gd`, `.tscn`, `.tres`) upon invocation. If any file changed, it updates incrementally in ~30 ms. There is no background watcher process or daemon required.
@@ -114,7 +130,21 @@ CodeGraph automatically checks file hashes (`.gd`, `.tscn`, `.tres`) upon invoca
 2. Copy the `addons/codegraph` folder into your Godot project's `addons/` directory.
 3. Enable the plugin under **Project Settings > Plugins**.
 
-*Requirement: Python 3.10 or newer must be installed and accessible in your system's `PATH`.*
+### Requirements
+
+| Requirement | Notes |
+|---|---|
+| **Godot 4.4 or newer** | Tested on 4.7.2. The dock uses `add_control_to_bottom_panel()`, which is deprecated but still present in 4.4–4.7. |
+| **Python 3.10+** on `PATH` | Standard library only — no `pip install`. The plugin checks `python`, `python3` and `py`. If none is found, the buttons are disabled and the status bar tells you what to install. Windows: tick **“Add python.exe to PATH”** in the installer. |
+
+CodeGraph writes its index (`graph.db`, `bench.json`, `symbols.json`, `progress.json`) into a `.codegraph/` folder at **your** project root. Add it to your `.gitignore`:
+
+```gitignore
+# Godot CodeGraph index (generated, machine specific)
+.codegraph/
+```
+
+Nothing in `.codegraph/` is meant to be committed, and the plugin never touches your source files.
 
 ---
 
