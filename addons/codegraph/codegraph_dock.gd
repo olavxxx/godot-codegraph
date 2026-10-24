@@ -110,7 +110,12 @@ const STRINGS = {
 		"bench_grep": "Grep (competent)",
 		"bench_kg": "CodeGraph",
 		"bench_win_badge": "✓ CodeGraph wins (%s×)",
-		"bench_lose_badge": "Grep wins"
+		"bench_lose_badge": "Grep wins",
+		"bench_extra": "what grep costs on top",
+		"bench_scale": "one scale for every task",
+		"bench_row_win": "✓ ×%.1f fewer tokens · ×%.0f faster",
+		"bench_row_lose": "✗ ×%.1f more tokens · but ×%.0f faster",
+		"bench_total": "TOTAL"
 	},
 	"no": {
 		"tab_search": "🔍 Søk & Utforsk",
@@ -183,7 +188,12 @@ const STRINGS = {
 		"bench_grep": "Grep (dyktig)",
 		"bench_kg": "CodeGraph",
 		"bench_win_badge": "✓ CodeGraph vinner (%s×)",
-		"bench_lose_badge": "Grep vinner"
+		"bench_lose_badge": "Grep vinner",
+		"bench_extra": "det grep kostet i tillegg",
+		"bench_scale": "samme skala for alle oppgaver",
+		"bench_row_win": "✓ ×%.1f færre tokens · ×%.0f raskere",
+		"bench_row_lose": "✗ ×%.1f flere tokens · men ×%.0f raskere",
+		"bench_total": "TOTALT"
 	}
 }
 
@@ -707,6 +717,20 @@ func _load_existing_bench_chart() -> void:
 			bench_display.clear()
 			bench_display.append_text(chart_bb)
 
+func _bench_bar(g_val, k_val, scale_max, bar_w: int) -> String:
+	## Samanslått bar: blå = CodeGraph sin verdi, raud rest = det konkurrenten kosta i tillegg,
+	## prikkar = resten av feltet. Felles skala gjer søylene samanliknbare på tvers av oppgåver.
+	var gc = clampi(int(round(float(g_val) / max(float(scale_max), 1.0) * bar_w)), 1, bar_w)
+	var kc = clampi(int(round(float(k_val) / max(float(scale_max), 1.0) * bar_w)), 1, bar_w)
+	var s = "[color=#4fb3ff]" + "█".repeat(kc) + "[/color]"
+	if gc > kc:
+		s += "[color=#ef767a]" + "▒".repeat(gc - kc) + "[/color]"
+	var used = max(gc, kc)
+	if used < bar_w:
+		s += "[color=#223244]" + "·".repeat(bar_w - used) + "[/color]"
+	return s
+
+
 func _format_bench_json_as_charts(json_text: String) -> String:
 	var json = JSON.new()
 	if json.parse(json_text) != OK or not (json.data is Array):
@@ -735,18 +759,25 @@ func _format_bench_json_as_charts(json_text: String) -> String:
 		if int(r.get("graf_token", 0)) <= int(r.get("grep_dugleg_token", 0)):
 			won += 1
 	
-	var time_saved_pct = round(100.0 * (total_grep_ms - total_kg_ms) / max(total_grep_ms, 0.001))
-	var token_saved_pct = round(100.0 * (total_grep_tok - total_kg_tok) / max(total_grep_tok, 0.001))
-	
-	# KPI Oppsummering
+	# KPI: det som slår er ×-faktoren, ikkje prosentane
+	var time_factor = total_grep_ms / max(total_kg_ms, 0.001)
 	out += "[table=3]"
-	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#8ce56c][font_size=16][b]%s[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_time"), t("bench_time_sub") % time_saved_pct, t("bench_time_detail") % [total_kg_ms, total_grep_ms]]
-	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#8ce56c][font_size=16][b]%s[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_tokens"), t("bench_tokens_sub") % token_saved_pct, t("bench_tokens_detail") % [total_kg_tok, total_grep_tok]]
-	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#4fb3ff][font_size=16][b]%s[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_won"), t("bench_won_sub") % [won, rows.size()], t("bench_won_detail")]
+	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#8ce56c][font_size=26][b]×%.1f[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_time"), time_factor, t("bench_time_detail") % [total_kg_ms, total_grep_ms]]
+	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#8ce56c][font_size=26][b]−%d %%[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_tokens"), int(round(100.0 * (total_grep_tok - total_kg_tok) / max(total_grep_tok, 1))), t("bench_tokens_detail") % [total_kg_tok, total_grep_tok]]
+	out += "[cell][color=#ffd166][b]%s[/b][/color]\n[color=#4fb3ff][font_size=26][b]%d / %d[/b][/font_size][/color]\n[color=#6d8296]%s[/color][/cell]" % [t("bench_won"), won, rows.size(), t("bench_won_detail")]
 	out += "[/table]\n\n"
 	out += "[color=#1d2b3a]──────────────────────────────────────────────────────────────────────────────[/color]\n\n"
 	
-	# Visuelle søyler per oppgave
+	# Éi felles skala per metrikk: då kan auga samanlikne oppgåvene.
+	# Blå bit = det CodeGraph brukte, raud rest = det grep kosta i tillegg.
+	var bar_w = 28
+	var max_tok = 1
+	var max_ms = 1.0
+	for r in rows:
+		max_tok = max(max_tok, max(int(r.get("grep_dugleg_token", 0)), int(r.get("graf_token", 0))))
+		max_ms = max(max_ms, max(float(r.get("grep_dugleg_ms", 0.0)), float(r.get("graf_ms_varm", 0.0))))
+	out += "[color=#4fb3ff]█[/color][color=#6d8296] = CodeGraph   [/color][color=#ef767a]▒[/color][color=#6d8296] = %s   [/color][color=#6d8296][i]%s[/i][/color]\n\n" % [t("bench_extra"), t("bench_scale")]
+
 	for r in rows:
 		var id = int(r.get("id", 0))
 		var spm = r.get("spm", "")
@@ -755,27 +786,27 @@ func _format_bench_json_as_charts(json_text: String) -> String:
 				spm = str(r.get("spm_no"))
 			elif TASK_NAMES_NO.has(id):
 				spm = TASK_NAMES_NO[id]
-		
 		var g_tok = int(r.get("grep_dugleg_token", 0))
 		var k_tok = int(r.get("graf_token", 0))
 		var g_ms = float(r.get("grep_dugleg_ms", 0.0))
 		var k_ms = float(r.get("graf_ms_varm", 0.0))
-		var ratio = r.get("token_ratio", 1.0)
-		
-		var max_tok = max(g_tok, k_tok, 1)
-		var bar_len = 26
-		var g_bars = max(1, int(float(g_tok) / max_tok * bar_len))
-		var k_bars = max(1, int(float(k_tok) / max_tok * bar_len))
-		
-		var g_bar_str = "█".repeat(g_bars)
-		var k_bar_str = "█".repeat(k_bars)
-		
-		var win_badge = ("[color=#8ce56c][b]" + t("bench_win_badge") + "[/b][/color]") % str(ratio) if k_tok <= g_tok else ("[color=#ef767a][b]" + t("bench_lose_badge") + "[/b][/color]")
-		
-		out += "[b][color=#cfe3f5]#%d %s[/color][/b]  %s\n" % [id, spm, win_badge]
-		out += "  [color=#6d8296]%s:[/color] [color=#ef767a]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n" % [t("bench_grep"), g_bar_str, g_tok, g_ms]
-		out += "  [color=#4fb3ff]%s:    [/color] [color=#4fb3ff]%s[/color] [color=#cfe3f5]%d t[/color] [color=#6d8296](%.1f ms)[/color]\n\n" % [t("bench_kg"), k_bar_str, k_tok, k_ms]
-	
+		var speed = g_ms / max(k_ms, 0.01)
+		var badge = ""
+		if k_tok <= g_tok:
+			badge = "[color=#8ce56c][b]✓ %s[/b][/color]" % (t("bench_row_win") % [float(g_tok) / max(k_tok, 1), speed])
+		else:
+			badge = "[color=#ef767a][b]✗ %s[/b][/color]" % (t("bench_row_lose") % [float(k_tok) / max(g_tok, 1), speed])
+		out += "[b][color=#cfe3f5]#%d  %s[/color][/b]  %s\n" % [id, spm, badge]
+		out += "  [color=#6d8296]tokens[/color] %s  [color=#cfe3f5]%5d → %4d t[/color]\n" % [_bench_bar(g_tok, k_tok, max_tok, bar_w), g_tok, k_tok]
+		out += "  [color=#6d8296]tid   [/color] %s  [color=#cfe3f5]%6.1f → %5.1f ms[/color]\n\n" % [_bench_bar(int(g_ms * 100.0), int(k_ms * 100.0), int(max_ms * 100.0), bar_w), g_ms, k_ms]
+
+	out += "[color=#1d2b3a]%s[/color]\n" % "█".repeat(bar_w)
+	var pct = int(round(100.0 * (total_grep_tok - total_kg_tok) / max(total_grep_tok, 1)))
+	out += "[b][color=#ffd166]%s[/b] [color=#6d8296]tokens[/color] %s  [color=#cfe3f5]%5d → %4d t[/color]  [color=#8ce56c][b]−%d %%[/b][/color]\n" % [
+		t("bench_total"), _bench_bar(total_grep_tok, total_kg_tok, total_grep_tok, bar_w), total_grep_tok, total_kg_tok, pct]
+	out += "[color=#6d8296]        tid   [/color] %s  [color=#cfe3f5]%6.1f → %5.1f ms[/color]  [color=#8ce56c][b]×%.0f[/b][/color]\n" % [
+		_bench_bar(int(total_grep_ms * 100.0), int(total_kg_ms * 100.0), int(total_grep_ms * 100.0), bar_w),
+		total_grep_ms, total_kg_ms, total_grep_ms / max(total_kg_ms, 0.01)]
 	return out
 
 func _on_open_json_pressed() -> void:
