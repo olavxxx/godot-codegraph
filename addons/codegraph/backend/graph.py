@@ -36,7 +36,9 @@ try:
 except Exception:
     pass
 
-SCHEMA_VERSION = 12
+# 13: kantlappar og uavklart-årsaker er skrivne om til engelsk. Eit gammalt index
+# får blanda språk på dei linjene, så auken tvingar fram éin reindeks.
+SCHEMA_VERSION = 13
 DB_DIR = ".codegraph"
 
 # Verktøyet sin eiga mappe, uavhengig av kor det ligg i prosjektet
@@ -179,7 +181,7 @@ def find_root(start: str | None) -> Path:
         cur = cur.parent
     if (p / "project.godot").is_file():
         return p
-    sys.exit(f"Finner ikke project.godot opp fra {p} (pek med --path)")
+    sys.exit(f"Could not find project.godot upwards from {p} (point at it with --path)")
 
 
 def strip_comment(line: str) -> str:
@@ -240,7 +242,7 @@ def list_files(root: Path, want_web: bool = False, want_addons: bool = False) ->
                 if keep(rel):
                     rels.add(rel)
     except Exception as e:  # git borta eller sandbox: fall tilbake til filwalk
-        log(f"(git ls-files utilgjengelig: {e})")
+        log(f"(git ls-files unavailable: {e})")
 
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
@@ -693,7 +695,7 @@ def index(root: Path, force: bool = False, want_web: bool = False, want_addons: 
             text = fp.read_text(encoding="utf-8-sig", errors="replace")
         except Exception as e:
             parse_errors += 1
-            log(f"lesefeil {rel}: {e}")
+            log(f"read error {rel}: {e}")
             continue
         ext = os.path.splitext(rel)[1]
         if rel == "project.godot":
@@ -706,7 +708,7 @@ def index(root: Path, force: bool = False, want_web: bool = False, want_addons: 
                 decls, refs = fn(text)
             except Exception as e:
                 parse_errors += 1
-                log(f"parsefeil {rel}: {e}")
+                log(f"parse error {rel}: {e}")
                 continue
         st = fp.stat()
         con.execute("INSERT OR REPLACE INTO files(path,kind,sha,lines,bytes,mtime,addons) VALUES(?,?,?,?,?,?,?)",
@@ -861,7 +863,7 @@ def resolve(con: sqlite3.Connection) -> None:
             return here[0][0], "same-file"
         near = [c for c in ids if c[1] and file and same_dir(c[1], file)]
         if near:
-            return near[0][0], f"same-mappe,{len(ids)} kandidatar"
+            return near[0][0], f"same-dir,{len(ids)} candidates"
         return ids[0][0], f"ambiguous:{len(ids)}"
 
     def node_script_of(scene: str, node: str | None, depth: int = 6) -> str | None:
@@ -890,7 +892,7 @@ def resolve(con: sqlite3.Connection) -> None:
         for _ in range(depth):
             nid = fn_by_file.get((cur, method))
             if nid:
-                return nid, ("eige script" if not chain else f"arva i {cur}")
+                return nid, ("own script" if not chain else f"inherited from {cur}")
             base = ext_ref.get(cur)
             nxt = class_file.get(base) if base else None
             if not nxt or nxt in chain:
@@ -909,7 +911,7 @@ def resolve(con: sqlite3.Connection) -> None:
         if t and t in file_class:
             return file_class[t] and next((f for f, c in file_class.items() if c == t), file), f"{receiver}: {t}"
         if receiver in file_class.values():
-            return next((f for f, c in file_class.items() if c == receiver), file), f"{receiver} (klasse)"
+            return next((f for f, c in file_class.items() if c == receiver), file), f"{receiver} (class)"
         t2 = var_file.get(file, {}).get(receiver)
         if t2:
             return t2.replace("res://", "").lstrip("/"), f"{receiver} = preload"
@@ -989,7 +991,7 @@ def resolve(con: sqlite3.Connection) -> None:
                 hid, hnote = find_method(script, arg or "")
                 if hid is None:
                     unp(f, "connects_to", arg, name, line,
-                        f"method-not-in-{script}-eller-basisklasse")
+                        f"method-not-in-{script}-or-base-class")
                     continue
                 add_edge(sid, hid, "connects_to", line,
                          f"tscn from={receiver} to={to} ({hnote})")
@@ -997,13 +999,13 @@ def resolve(con: sqlite3.Connection) -> None:
                 hid, hnote = pick(fns, arg or "", f)
                 if hid:
                     add_edge(sid, hid, "connects_to", line,
-                             f"tscn from={receiver} to={to} namngiss:" + (hnote or "unik"))
+                             f"tscn from={receiver} to={to} named:" + (hnote or "unique"))
                 else:
-                    unp(f, "connects_to", arg, name, line, "tscn-node-utan-script")
+                    unp(f, "connects_to", arg, name, line, "tscn-node-without-script")
         elif kind == "vartype":
             var_type.setdefault(f, {})[receiver] = name
             if name in classes:
-                add_edge(fid, classes[name][0], "references", line, "felt-type")
+                add_edge(fid, classes[name][0], "references", line, "field-type")
         elif kind == "varfile":
             var_file.setdefault(f, {})[receiver] = (path or "").replace("res://", "").lstrip("/")
         elif kind == "references":
@@ -1028,9 +1030,9 @@ def resolve(con: sqlite3.Connection) -> None:
             elif name.startswith(NOISE_PREFIX) or name in GODOT_SINGLETONS:
                 pass  # arva motor-/Node-metode: verken kant eller støy
             elif name[:1].isupper():
-                unp(f, "calls", name, receiver, line, "konstruktør/motortype")
+                unp(f, "calls", name, receiver, line, "constructor/engine-type")
             else:
-                unp(f, "calls", name, receiver, line, "ikkje prosjektfunksjon")
+                unp(f, "calls", name, receiver, line, "not-a-project-function")
         elif kind == "group":
             gid = node_id(con, "group:" + name, True, "group", name)
             if receiver and receiver.startswith("call_"):
@@ -1073,7 +1075,7 @@ def ensure_fresh(con: sqlite3.Connection, root: Path, quiet: bool = True,
     have = con.execute("SELECT v FROM meta WHERE k='scope'").fetchone()
     if not db_ready(con) or (have is not None and have[0] != need):
         if not quiet and have is not None:
-            log(f"(endrar filutval: {have[0]} → {need}, bygger på nytt …)")
+            log(f"(changing the file scope: {have[0]} → {need}, rebuilding …)")
         index(root, force=True, want_web=want_web, want_addons=want_addons)
         return
     want = {p: hashlib.sha256((root / p).read_bytes()).hexdigest()
@@ -1081,7 +1083,7 @@ def ensure_fresh(con: sqlite3.Connection, root: Path, quiet: bool = True,
     have_f = {p: s for p, s in con.execute("SELECT path, sha FROM files")}
     if set(want) != set(have_f) or any(want[p] != have_f[p] for p in set(want) & set(have_f)):
         if not quiet:
-            log("(indeksen er utdatert, bygger på nytt …)")
+            log("(the index is out of date, rebuilding …)")
         index(root, want_web=want_web, want_addons=want_addons)
 
 
@@ -1117,11 +1119,11 @@ def cmd_find(con, name: str, limit: int = 60) -> int:
         "AND kind IN ('class','fn','signal','var','const','autoload','group','enum') ORDER BY kind,name LIMIT ?",
         (f"%{name}%", limit)))
     if not rows:
-        print(f"ingen treff på {name!r}")
+        print(f"no matches for {name!r}")
         return 1
     for r in rows:
         print(show(r))
-    print(f"\n{len(rows)} treff" + (" (flere — bruk mer spesifikt navn)" if len(rows) == limit else ""))
+    print(f"\n{len(rows)} matches" + (" (more — use a more specific name)" if len(rows) == limit else ""))
     return 0
 
 
@@ -1135,10 +1137,10 @@ def cmd_outline(con, target: str) -> int:
             or con.execute("SELECT path FROM files WHERE path LIKE ?", (f"%{rel}%",)).fetchone() \
             or con.execute("SELECT file FROM nodes WHERE kind='autoload' AND name=?", (target,)).fetchone()
         if not f:
-            print(f"fant ikke klassen eller filen {target!r}")
+            print(f"did not find the class or the file {target!r}")
             return 1
         rows = [dict(id=None, kind="file", name=os.path.basename(f[0]), file=f[0], line=1,
-                     sig=f"fil {f[0]}", meta=None)]
+                     sig=f"file {f[0]}", meta=None)]
     for r in rows:
         print(show(r))
         file = r["file"]
@@ -1150,12 +1152,12 @@ def cmd_outline(con, target: str) -> int:
         var = [i for i in items if i["kind"] in ("var", "const", "enum")]
         fn = [i for i in items if i["kind"] in ("fn", "autoload")]
         if sig:
-            print("  signaler:")
+            print("  signals:")
             for i in sig:
                 print(f"    L{i['line']:<5} {i['name']} {i['sig'] or ''}")
         if var:
-            print(f"  felt/konstanter: {', '.join(i['name'] for i in var[:40])}" + (" …" if len(var) > 40 else ""))
-        print(f"  funksjoner ({len(fn)}):")
+            print(f"  fields/constants: {', '.join(i['name'] for i in var[:40])}" + (" …" if len(var) > 40 else ""))
+        print(f"  functions ({len(fn)}):")
         for i in fn:
             print(f"    L{i['line']:<5} {i['name']}{(i['sig'] or '()').split(i['name'],1)[-1] if i['sig'] else '()'}"
                   + ("  [rpc]" if i["meta"] == "rpc" else ""))
@@ -1172,7 +1174,7 @@ def top_files(rows: list, k: int = 8) -> str:
 
 def hint(more: int, cmd: str, limit: int) -> None:
     if more > 0:
-        print(f"    … {more} fleire  (vis alle: --limit {more + limit})")
+        print(f"    … {more} more  (show all: --limit {more + limit})")
 
 
 def L(a) -> int:
@@ -1184,7 +1186,7 @@ def cmd_signal(con, name: str, limit: int = 25) -> int:
     rows = node_row(con, name)
     sig = [r for r in rows if r["kind"] == "signal"]
     if not sig:
-        print(f"ingen signal erklært med navn {name!r}. Prøv: kg find {name}")
+        print(f"no signal declared with the name {name!r}. Try: kg find {name}")
         for r in rows[:limit]:
             print(show(r))
         if len(rows) > limit:
@@ -1192,21 +1194,21 @@ def cmd_signal(con, name: str, limit: int = 25) -> int:
         return 1
     con.row_factory = sqlite3.Row
     for s in sig:
-        stad = f"erklært {s['file']}:{s['line']}" if s["file"] else "MOTORSIGNAL (ikkje erklært i prosjektmanus)"
+        stad = f"declared {s['file']}:{s['line']}" if s["file"] else "ENGINE SIGNAL (not declared in a project script)"
         print(f"signal {s['name']}{s['sig'] or ''}  —  {stad}")
         sid = s["id"]
         em = list(con.execute(
             "SELECT f.kind AS sk,f.name AS src,f.file,e.line AS ln FROM edges e JOIN nodes f ON f.id=e.src "
             "WHERE e.dst=? AND e.kind='emits' ORDER BY f.file,e.line", (sid,)))
-        print(f"\n  emitterer: {len(em)} i {len({r['file'] for r in em})} filer  [{top_files(em)}]")
+        print(f"\n  emitters: {len(em)} in {len({r['file'] for r in em})} files  [{top_files(em)}]")
         for r in em[:limit]:
-            who = f"{r['src']}()" if r["sk"] == "fn" else "(toppnivå)"
-            print(f"    {r['file']}:{r['ln']}  i {who}")
+            who = f"{r['src']}()" if r["sk"] == "fn" else "(top level)"
+            print(f"    {r['file']}:{r['ln']}  in {who}")
         hint(len(em) - limit, "signal", limit)
         rec = list(con.execute(
             "SELECT n.name,n.file,n.line,e.note FROM edges e JOIN nodes n ON n.id=e.dst "
             "WHERE e.src=? AND e.kind='connects_to' ORDER BY n.file", (sid,)))
-        print(f"\n  mottakarar: {len(rec)} i {len({r['file'] for r in rec})} filer  [{top_files(rec)}]")
+        print(f"\n  receivers: {len(rec)} in {len({r['file'] for r in rec})} files  [{top_files(rec)}]")
         for r in rec[:limit]:
             print(f"    {r['name']:34} {r['file']}:{r['line']}   ({r['note'] or ''})")
         hint(len(rec) - limit, "signal", limit)
@@ -1216,19 +1218,19 @@ def cmd_signal(con, name: str, limit: int = 25) -> int:
         tscn = list(con.execute("SELECT f.file,e.line AS ln,e.note FROM edges e JOIN nodes f ON f.id=e.src "
                                 "WHERE e.dst=? AND e.kind='references' AND e.note LIKE 'from=%' ORDER BY f.line", (sid,)))
         if where:
-            print(f"\n  .connect()-kallepunkt utan løst mottaksmål: {len(where)}  [{top_files(where)}]")
+            print(f"\n  .connect() call sites with no resolved target: {len(where)}  [{top_files(where)}]")
             for r in where[:limit]:
                 print(f"    {r['file']}:{r['ln']}")
             hint(len(where) - limit, "signal", limit)
         if tscn:
-            print(f"\n  .tscn-koblingar: {len(tscn)} i {len({r['file'] for r in tscn})} scener  [{top_files(tscn)}]")
+            print(f"\n  .tscn connections: {len(tscn)} in {len({r['file'] for r in tscn})} scenes  [{top_files(tscn)}]")
             for r in tscn[:limit]:
                 print(f"    {r['file']}:{r['ln']}  {r['note']}")
             hint(len(tscn) - limit, "signal", limit)
     unres = list(con.execute(
         "SELECT file,line,reason FROM unresolved WHERE name=? AND (kind LIKE '%connect%' OR kind='emits')", (name,)))
     if unres:
-        print(f"\n  uavklarte: {len(unres)}")
+        print(f"\n  unresolved: {len(unres)}")
         for r in unres[:limit]:
             print(f"    {r['file']}:{r['line']}  {r['reason']}")
         hint(len(unres) - limit, "signal", limit)
@@ -1240,7 +1242,7 @@ def _dir(con, name: str, want: str, limit: int = 25, flat: bool = False) -> int:
     --all gjev den gamle utskrifta kant for kant."""
     rows = node_row(con, name)
     if not rows:
-        print(f"fant ikke {name!r}  —  kg find {name}")
+        print(f"did not find {name!r}  —  kg find {name}")
         return 1
     con.row_factory = sqlite3.Row
     q = ("SELECT DISTINCT n.kind,n.name,n.file,n.line,e.line AS at,e.kind AS ek,e.note FROM edges e "
@@ -1253,23 +1255,23 @@ def _dir(con, name: str, want: str, limit: int = 25, flat: bool = False) -> int:
     maxc = len(rows) if flat else max(1, min(8, limit // 3))
     tot = sum(len(v) for v in per.values())
     if len(rows) > 1:
-        print(f"{want} for {name!r}: {len(rows)} kandidatar i {len({r['file'] for r in rows})} filer, "
-              f"{tot} kantar totalt — utvidar dei {min(maxc, len(rows))}aste, resten som éin linje")
+        print(f"{want} for {name!r}: {len(rows)} candidates in {len({r['file'] for r in rows})} files, "
+              f"{tot} edges total — expanding the first {min(maxc, len(rows))}, the rest as a single line")
     for r in rang[:maxc]:
         alle = per[r["id"]]
         print(f"[{r['kind']}] {r['name']}  {r['file'] or '-'}:{r['line'] or '-'}")
         if not alle:
-            print("   0 kantar  (ingen kanter)")
+            print("   0 edges  (no edges)")
             continue
         telj: dict[str, int] = {}
         for x in alle:
             telj[x["ek"]] = telj.get(x["ek"], 0) + 1
-        print(f"   {len(alle)} kantar  [" + ", ".join(f"{k}:{v}" for k, v in
+        print(f"   {len(alle)} edges  [" + ", ".join(f"{k}:{v}" for k, v in
               sorted(telj.items(), key=lambda kv: -kv[1])) + "]")
         if flat:
             for x in alle:
                 der = f"{x['file'] or '-'}:{x['line'] or '-'}"
-                kall = f"   (kalla {x['at']})" if x["at"] and x["at"] != x["line"] else ""
+                kall = f"   (called {x['at']})" if x["at"] and x["at"] != x["line"] else ""
                 print(f"   {x['ek']:12} {x['kind']:7} {x['name']:34} {der}{kall}"
                       + (f"  [{x['note']}]" if x["note"] and x["note"] != "same-file" else ""))
             continue
@@ -1290,39 +1292,39 @@ def _dir(con, name: str, want: str, limit: int = 25, flat: bool = False) -> int:
                 ln = x["line"]
             if ln and ln not in g["linjer"]:
                 g["linjer"].append(ln)
-        print(f"   {len(gr)} filar  (visar topp {min(limit, len(gr))}, gruppert per fil; "
-              f"kant for kant: --all)")
+        print(f"   {len(gr)} files  (showing top {min(limit, len(gr))}, grouped per file; "
+              f"edge by edge: --all)")
         for f, g in sorted(gr.items(), key=lambda kv: (-kv[1]["n"], kv[0]))[:limit]:
             ek = "  [" + ", ".join(f"{k}:{v}" for k, v in sorted(g["ek"].items(), key=lambda kv: -kv[1])) + "]" \
                  if len(g["ek"]) > 1 else ""
-            lbl = "kalla frå" if want == "callers" else "kallar"
+            lbl = "called from" if want == "callers" else "calls"
             namn = ", ".join(g["namn"][:6]) + (f" +{len(g['namn']) - 6}" if len(g["namn"]) > 6 else "")
             ln = ", ".join(f"L{i}" for i in sorted(g["linjer"])[:10]) + \
                  (f" +{len(g['linjer']) - 10}" if len(g["linjer"]) > 10 else "")
             print(f"   {g['n']:4}  {f:52}{ek}")
-            print(f"         {lbl}: {namn}" + (f"   linjer: {ln}" if ln else ""))
+            print(f"         {lbl}: {namn}" + (f"   lines: {ln}" if ln else ""))
         if len(gr) > limit:
-            print(f"    … {len(gr) - limit} fleire filar  (vis alle: --limit {len(gr)})")
+            print(f"    … {len(gr) - limit} more files  (show all: --limit {len(gr)})")
     rest = rang[maxc:]
     med = [r for r in rest if per[r["id"]]]
     if med:
-        print(f"\n  {len(med)} kandidatar til med kantar (berre teljing):")
+        print(f"\n  {len(med)} more candidates with edges (count only):")
         for r in med[:limit]:
             print(f"   {len(per[r['id']]):4}  {r['file'] or '-'}:{r['line'] or '-'}")
         if len(med) > limit:
-            print(f"    … {len(med) - limit} fleire  (vis alle: --limit {len(med)})")
+            print(f"    … {len(med) - limit} more  (show all: --limit {len(med)})")
     utan = [r for r in rest if not per[r["id"]]]
     if utan:
-        print(f"  {len(utan)} kandidatar utan kantar: "
+        print(f"  {len(utan)} candidates without edges: "
               + ", ".join(f"{(r['file'] or '-').rsplit('/', 1)[-1]}:{r['line']}" for r in utan[:10])
-              + (f" +{len(utan) - 10} til" if len(utan) > 10 else ""))
+              + (f" +{len(utan) - 10} more" if len(utan) > 10 else ""))
     return 0
 
 
 def cmd_impact(con, name: str, depth: int, limit: int = 25) -> int:
     rows = node_row(con, name)
     if not rows:
-        print(f"fant ikke {name!r}")
+        print(f"did not find {name!r}")
         return 1
     start = {r["id"] for r in rows}
     seen: dict[int, int] = {s: 0 for s in start}
@@ -1352,27 +1354,27 @@ def cmd_impact(con, name: str, depth: int, limit: int = 25) -> int:
     ledd: dict[int, int] = {}
     for r in out:
         ledd[seen[r["id"]]] = ledd.get(seen[r["id"]], 0) + 1
-    print(f"påverknad av {name!r}: {len(medFIL)} symbol i {len(byfile)} filer  "
-          + "  ".join(f"ledd{k}:{v}" for k, v in sorted(ledd.items())))
-    print("\n  berørte filer (tyngste først):")
+    print(f"impact of {name!r}: {len(medFIL)} symbols in {len(byfile)} files  "
+          + "  ".join(f"hop{k}:{v}" for k, v in sorted(ledd.items())))
+    print("\n  affected files (heaviest first):")
     for f, n in byfile[:limit]:
         print(f"   {n:4}  {f}")
     if len(byfile) > limit:
         hint(len(byfile) - limit, "impact", limit)
     sym = [r for r in medFIL if r["kind"] in ("class", "fn", "signal", "autoload")]
-    print(f"\n  symbol ({len(sym)} totalt, topp {min(limit, len(sym))}):")
+    print(f"\n  symbols ({len(sym)} total, top {min(limit, len(sym))}):")
     for r in sym[:limit]:
         print(f"   {r['kind']:7} {r['name']:32} {r['file'] or '-'}:{r['line'] or '-'}")
     hint(len(sym) - limit, "impact", limit)
     if hubar:
-        print(f"  + {len(hubar)} globale hubbar utan fil (motorsignal/gruppenamn) — tellar ikkje som testbare stader")
+        print(f"  + {len(hubar)} global hubs without a file (engine signals / group names) — do not count as testable places")
     return 0
 
 
 def cmd_path(con, a: str, b: str) -> int:
     ra, rb = node_row(con, a), node_row(con, b)
     if not ra or not rb:
-        print("fant ikke ett av navnene")
+        print("one of the two names was not found")
         return 1
     src, dst = ra[0]["id"], rb[0]["id"]
     prev = {src: None}
@@ -1394,7 +1396,7 @@ def cmd_path(con, a: str, b: str) -> int:
                     return 0
                 nxt.append(d)
         frontier = nxt
-    print(f"ingen kantsti {a} → {b}")
+    print(f"no edge path {a} → {b}")
     return 1
 
 
@@ -1403,7 +1405,7 @@ def cmd_deps(con, target: str, reverse: bool = False, limit: int = 25) -> int:
     f = con.execute("SELECT id,file FROM nodes WHERE kind='file' AND file=?", (rel,)).fetchone() \
         or con.execute("SELECT id,file FROM nodes WHERE kind='file' AND file LIKE ?", (f"%{rel}%",)).fetchone()
     if not f:
-        print(f"ukjent fil {target!r}")
+        print(f"unknown file {target!r}")
         return 1
     q = ("SELECT n.kind,n.name,n.file,n.line,e.line AS at,e.kind AS ek,e.note FROM edges e JOIN nodes n ON n.id=e.dst "
          "WHERE e.src=? ORDER BY ek,n.kind,n.name") if not reverse else \
@@ -1414,11 +1416,11 @@ def cmd_deps(con, target: str, reverse: bool = False, limit: int = 25) -> int:
     telj: dict[str, int] = {}
     for r in rows:
         telj[r["ek"]] = telj.get(r["ek"], 0) + 1
-    print(f"{f[1]}  {'avhenger av' if not reverse else 'brukes av'}  "
-          f"({len(rows)} kantar: " + ", ".join(f"{k}:{v}" for k, v in sorted(telj.items(), key=lambda kv: -kv[1])) + ")")
+    print(f"{f[1]}  {'depends on' if not reverse else 'used by'}  "
+          f"({len(rows)} edges: " + ", ".join(f"{k}:{v}" for k, v in sorted(telj.items(), key=lambda kv: -kv[1])) + ")")
     for r in rows[:limit]:
-        der = f"{r['file']}:{r['line']}" if r["file"] else "(motor)"
-        kall = f"   (lenje {r['at']})" if r["at"] else ""
+        der = f"{r['file']}:{r['line']}" if r["file"] else "(engine)"
+        kall = f"   (line {r['at']})" if r["at"] else ""
         print(f"   {r['ek']:13} {r['kind']:7} {r['name']:32} {der}{kall}")
     hint(len(rows) - limit, "deps", limit)
     return 0
@@ -1428,7 +1430,7 @@ def cmd_unresolved(con, top: int) -> int:
     rows = list(con.execute("SELECT kind,name,reason,count(*) c FROM unresolved GROUP BY kind,name,reason "
                             "ORDER BY c DESC LIMIT ?", (top,)))
     tot = con.execute("SELECT count(*) FROM unresolved").fetchone()[0]
-    print(f"{tot} uavklarte referanser totalt (top {top}):")
+    print(f"{tot} unresolved references total (top {top}):")
     for k, n, r, c in rows:
         print(f"  {c:5}  {k:12} {n:34} {r}")
     return 0
@@ -1444,9 +1446,9 @@ def cmd_rpc(con, pattern: str | None, limit: int = 25) -> int:
         f"SELECT n.name, n.file, n.line, n.sig, COALESCE(x.ncall,0) AS ncall "
         f"FROM nodes n LEFT JOIN (SELECT dst, count(*) AS ncall FROM edges WHERE kind='calls' GROUP BY dst) x ON x.dst=n.id "
         f"WHERE n.kind='fn' AND n.meta='rpc'{where} ORDER BY n.file, n.line", args).fetchall()
-    print(f"@rpc-funksjonar: {len(rows)} i {len({r['file'] for r in rows})} filer  [{top_files(rows)}]")
-    print(f"  direkte kall totalt: {sum(r['ncall'] for r in rows)}  "
-          f"( {sum(1 for r in rows if not r['ncall'])} utan direkte kall = berre RPC-kall over nett )")
+    print(f"@rpc functions: {len(rows)} in {len({r['file'] for r in rows})} files  [{top_files(rows)}]")
+    print(f"  direct calls total: {sum(r['ncall'] for r in rows)}  "
+          f"( {sum(1 for r in rows if not r['ncall'])} with no direct calls = only RPC calls over the network )")
     byfile: dict[str, list] = {}
     for r in rows:
         byfile.setdefault(r["file"], []).append(r)
@@ -1457,13 +1459,13 @@ def cmd_rpc(con, pattern: str | None, limit: int = 25) -> int:
             mode = ""
             if r["sig"] and "@rpc" in r["sig"]:
                 mode = r["sig"].split("@rpc", 1)[1].strip()
-            tail = f"   kalla {r['ncall']} stad(er)" if r["ncall"] else "   [ingen direkte kall]"
+            tail = f"   called {r['ncall']} place(s)" if r["ncall"] else "   [no direct calls]"
             print(f"     :{r['line']:<6} {r['name']}  {mode}{tail}")
             vist += 1
         if len(rs) > max(1, limit // max(1, min(len(byfile), 6))):
-            print(f"     … {len(rs) - (limit // max(1, min(len(byfile), 6)))} fleire i denne fila")
+            print(f"     … {len(rs) - (limit // max(1, min(len(byfile), 6)))} more in this file")
     if vist < len(rows):
-        print(f"  (visar {vist} av {len(rows)} — alle: --limit {len(rows)})")
+        print(f"  (showing {vist} of {len(rows)} — all: --limit {len(rows)})")
     return 0
 
 
@@ -1474,16 +1476,16 @@ def cmd_status(con, root: Path) -> int:
     un = con.execute("SELECT count(*) FROM unresolved").fetchone()[0]
     stamps = dict(con.execute("SELECT k,v FROM meta"))
     print(f"index: {root / DB_DIR / DB_NAME}")
-    print(f"bygget: {stamps.get('indexed_at','(ikkje en full build enno)')}   "
-          f"sist sjekka: {stamps.get('checked_at','-')}   schema v{SCHEMA_VERSION}   "
-          f"filutval: {stamps.get('scope', scope_str())}")
-    print("filer: " + "  ".join(f"{k}={v}" for k, v in sorted(fl.items())))
-    print("noder: " + "  ".join(f"{k}={v}" for k, v in sorted(n.items(), key=lambda kv: -kv[1])))
-    print("kanter: " + "  ".join(f"{k}={v}" for k, v in sorted(e.items(), key=lambda kv: -kv[1])))
-    print(f"uavklart: {un}")
+    print(f"built: {stamps.get('indexed_at','(no full build yet)')}   "
+          f"last checked: {stamps.get('checked_at','-')}   schema v{SCHEMA_VERSION}   "
+          f"file scope: {stamps.get('scope', scope_str())}")
+    print("files: " + "  ".join(f"{k}={v}" for k, v in sorted(fl.items())))
+    print("nodes: " + "  ".join(f"{k}={v}" for k, v in sorted(n.items(), key=lambda kv: -kv[1])))
+    print("edges: " + "  ".join(f"{k}={v}" for k, v in sorted(e.items(), key=lambda kv: -kv[1])))
+    print(f"unresolved: {un}")
     agents_f = root / "AGENTS.md"
     if not agents_f.exists() or not _has_block(_read_keep(agents_f)[0]):
-        print("tips:   kg agents --install   # gjer AI-agentane i prosjektet kjende med dette verktøyet")
+        print("tips:   kg agents --install   # make the AI agents in the project aware of this tool")
     return 0
 
 
@@ -1512,11 +1514,11 @@ def refresh_agent_files_after_update(root: Path, as_json: bool) -> list[str]:
     try:
         r = subprocess.run([sys.executable, str(new_script), "--path", str(root),
                             "agents", "--install"], capture_output=True, text=True, timeout=120)
-        note = "oppdatert" if r.returncode == 0 else "kunne ikkje oppdaterast"
+        note = "updated" if r.returncode == 0 else "could not be updated"
     except Exception:                                          # noqa: BLE001
-        note = "kunne ikkje oppdaterast"
+        note = "could not be updated"
     if not as_json:
-        print(f"  agentfilene ({', '.join(touched)}) blei skrive på nytt av den nye versjonen: {note}")
+        print(f"  the agent files ({', '.join(touched)}) were rewritten by the new version: {note}")
     return touched
 
 
@@ -1669,7 +1671,7 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None, 
             if _has_block(txt) and _drop_block(txt).strip() == "":
                 # Heile fila var berre vårt eget tjuvstart-avtrykk.
                 p.unlink()
-                print(f"  sletta {rel} (var berre CodeGraph-blokken)")
+                print(f"  deleted {rel} (it was only the CodeGraph block)")
                 # Tomme mapper vi laga (.cursor/rules/) follows med.
                 up = p.parent
                 while up != root and up.exists() and not any(up.iterdir()):
@@ -1677,7 +1679,7 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None, 
                     up = up.parent
             elif _has_block(txt):
                 _write_keep(p, _drop_block(txt), eol, bom)
-                print(f"  tok ut CodeGraph-blokken frå {rel}")
+                print(f"  removed the CodeGraph block from {rel}")
         return 0
 
     if install:
@@ -1687,11 +1689,11 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None, 
             if rel == "AGENTS.md":
                 txt, eol, bom = _read_keep(p) if p.exists() else ("", "\n", "")
                 if _has_block(txt) and _inner(txt) == _inner(block):
-                    print(f"  {rel}: allereie installert (rør ikkje)")
+                    print(f"  {rel}: already installed (left untouched)")
                     continue
                 # Blokk som er redigert for hand, blir verna utan --force.
                 if _has_block(txt) and not force and _inner(txt) != _inner(block):
-                    print(f"  {rel}: blokken er redigert for hand - bruk --force for å skrive over")
+                    print(f"  {rel}: the block was edited by hand - use --force to overwrite it")
                     continue
                 p.parent.mkdir(parents=True, exist_ok=True)
                 _write_keep(p, _splice_block(txt, block), eol, bom)
@@ -1699,32 +1701,32 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None, 
                 if p.exists():
                     txt, eol, bom = _read_keep(p)
                     if not _has_block(txt):
-                        print(f"  hoppar over {rel}: brukaren har allereie ei anna fil der")
+                        print(f"  skipping {rel}: the user already has another file there")
                         continue
                     # Peikefiler har berre merke + to linjer, så det er INNER
                     # i desse filene som samanliknast - ikkje heile AGENTS.md-blokka.
                     want = _inner(_wrap(""))
                     if _inner(txt) == want:
-                        print(f"  {rel}: allereie installert (rør ikkje)")
+                        print(f"  {rel}: already installed (left untouched)")
                         continue
                     if not force:
-                        print(f"  {rel}: blokken er redigert for hand - bruk --force for å skrive over")
+                        print(f"  {rel}: the block was edited by hand - use --force to overwrite it")
                         continue
                     _write_keep(p, _wrap(""), eol, bom)
-                    print(f"  skreiv {rel}")
+                    print(f"  wrote {rel}")
                     continue
                 else:
                     eol, bom = ("\r\n" if os.name == "nt" else "\n"), ""
                 p.parent.mkdir(parents=True, exist_ok=True)
                 _write_keep(p, _wrap(""), eol, bom)
-            print(f"  skreiv {rel}")
-        print("Desse filane er ment å committast. Angre: kg agents --remove")
+            print(f"  wrote {rel}")
+        print("These files are meant to be committed. Undo: kg agents --remove")
         return 0
 
     # status (default)
     alle = ["AGENTS.md"] + list(POINTER_TARGETS.values())
     funnen = [rel for rel in alle if (root / rel).exists() and _has_block(_read_keep(root / rel)[0])]
-    print("agentinstruksjonar: " + ("installert (" + ", ".join(funnen) + ")" if funnen else "ikkje installert"))
+    print("agent instructions: " + ("installed (" + ", ".join(funnen) + ")" if funnen else "not installed"))
     if not funnen:
         print("  kg agents --install          # AGENTS.md")
         print("  kg agents --install --tools claude,copilot,cursor")
@@ -1806,10 +1808,10 @@ def cmd_md(con, scope: str | None, budget: int | None, rank: bool, show_signals:
     ranked = sorted(rows, key=lambda r: -(deg.get(r["id"], 0) + info.get(r["file"], {}).get("funcs", 0)))
     if not rank:
         ranked = sorted(rows, key=lambda r: r["file"])
-    out = ["# Repo-kart (generert av CodeGraph — graph.py, ikkje handredigert)",
-           "kolonar: fil | class | extends | funcs | signaler | scenenoder | script | autoload | grader", ""]
+    out = ["# Repo map (generated by CodeGraph — graph.py, not hand-edited)",
+           "columns: file | class | extends | funcs | signals | scene nodes | script | autoload | degree", ""]
     if show_signals:
-        out.append("## Signaler")
+        out.append("## Signals")
         for nm, file, line in con.execute("SELECT name,file,line FROM nodes WHERE kind='signal' ORDER BY name"):
             out.append(f"- `{nm}` — {file}:{line}")
         out.append("")
@@ -1826,7 +1828,7 @@ def cmd_md(con, scope: str | None, budget: int | None, rank: bool, show_signals:
         for l in lines:
             acc += len(l) // 3 + 1
             if acc > approx:
-                kept.append(f"… {len(lines) - len(kept)} filer utelatt (bruk --scope <ord> eller --budget)")
+                kept.append(f"… {len(lines) - len(kept)} files omitted (use --scope <word> or --budget)")
                 break
             kept.append(l)
         lines = kept
@@ -1889,7 +1891,7 @@ def gather_view(con, view: str, ego: str | None, depth: int, limit: int) -> dict
     else:  # ego
         rows = node_row(con, ego or "")
         if not rows:
-            sys.exit(f"fant ikke {ego!r} — bruk kg find")
+            sys.exit(f"did not find {ego!r} — use kg find")
         keep_ids = {r["id"] for r in rows}
         # utvid ego-et: fil/autoload/klasse → ta med alt den deklarerer (funksjonar/signal)
         for sid in list(keep_ids):
@@ -2009,7 +2011,7 @@ def cmd_selftest() -> int:
         return b.getvalue()
 
     checks = [
-        ("extends: Player.gd → BaseVehicle (prosjektklasse)", edge("extends", "Player.gd", "BaseVehicle")),
+        ("extends: Player.gd → BaseVehicle (project class)", edge("extends", "Player.gd", "BaseVehicle")),
         ("extends: Bullet.gd → Area2D (engine-base)",         edge("extends", "Bullet.gd", "Area2D")),
         ("autoload: Bus → Bus.gd",                            edge("uses_autoload", "Bus", "Bus.gd")),
         ("calls: Player.gd → spawn_vehicle",                  edge("calls", "Player.gd", "spawn_vehicle", "Player.gd")),
@@ -2026,39 +2028,39 @@ def cmd_selftest() -> int:
         ("engine singleton: Hurtbox.gd → Engine",             edge("references", "Hurtbox.gd", "Time")),
         ("inner class: Player.gd → SaveSlot",                 edge("contains", "Player.gd", "SaveSlot")),
         # --- regelverket som kom etter gjennomgang (rpøe: @rpc, gruppetyper, .tscn→script) ---
-        ("@rpc på eiga linje: net_ping meta=rpc",             1 if meta_of("net_ping") == "rpc" else 0),
-        ("@rpc-config i sig: any_peer",                       1 if "any_peer" in (con.execute(
+        ("@rpc on its own line: net_ping meta=rpc",             1 if meta_of("net_ping") == "rpc" else 0),
+        ("@rpc-config in sig: any_peer",                       1 if "any_peer" in (con.execute(
                                                                   "SELECT sig FROM nodes WHERE name='net_ping'").fetchone() or [""])[0] else 0),
-        ("ikkje @rpc: this_is_not_rpc utan meta",             1 if meta_of("this_is_not_rpc") == "" else 0),
-        ("in_group = medlemskap: RpcNet.gd → bandits",        edge("in_group", "RpcNet.gd", "bandits")),
-        ("queries_group = spørring: RpcNet.gd → bandits",     edge("queries_group", "RpcNet.gd", "bandits")),
-        (".tscn via instans + arv: body_entered → on_hit",    edge("connects_to", "body_entered", "on_hit")),
-        ("motor-signal i kode: pressed → _on_ui_pressed",     edge("connects_to", "pressed", "_on_ui_pressed")),
-        ("summert utskrift: tell først, kutt med --limit",     1 if ("fleire" in utskrift(cmd_signal, "hp_changed", 1)
-                                                                     and "mottakarar:" in utskrift(cmd_signal, "hp_changed", 1)) else 0),
-        ("gruppe-API ikkje støy: ingen 'add_to_group'-call",   1 if con.execute(
+        ("not @rpc: this_is_not_rpc without meta",             1 if meta_of("this_is_not_rpc") == "" else 0),
+        ("in_group = membership: RpcNet.gd → bandits",        edge("in_group", "RpcNet.gd", "bandits")),
+        ("queries_group = query: RpcNet.gd → bandits",     edge("queries_group", "RpcNet.gd", "bandits")),
+        (".tscn via instance + inheritance: body_entered → on_hit",    edge("connects_to", "body_entered", "on_hit")),
+        ("engine signal in code: pressed → _on_ui_pressed",     edge("connects_to", "pressed", "_on_ui_pressed")),
+        ("summarized output: count first, cut with --limit",     1 if ("more" in utskrift(cmd_signal, "hp_changed", 1)
+                                                                     and "receivers:" in utskrift(cmd_signal, "hp_changed", 1)) else 0),
+        ("group API is not noise: no 'add_to_group' call",   1 if con.execute(
                                                                   "SELECT count(*) FROM unresolved WHERE name='add_to_group'").fetchone()[0] == 0 else 0),
-        ("motor-signal får eigen node (body_entered)",        1 if con.execute(
+        ("engine signal gets its own node (body_entered)",        1 if con.execute(
                                                                   "SELECT count(*) FROM nodes WHERE kind='signal' AND name='body_entered'").fetchone()[0] else 0),
         # --- regelverket som kom etter gjennomgang 2: gruppert callers/callees + filutval ---
-        ("gruppert callers-utskrift: fil + kalla linjer",      1 if ("gruppert per fil" in (g := utskrift(_dir, "take_damage", "callers", 3))
-                                                                     and "linjer: L" in g and "kalla frå" in g) else 0),
-        ("--all på callers: kant for kant (ingen gruppering)",  1 if "gruppert per fil" not in utskrift(_dir, "take_damage", "callers", 3, True) else 0),
-        ("addons/ er utelata i standardfilutvalet",            1 if not any(p.startswith("addons/") for p in list_files(fx)) else 0),
-        ("--addons tek med addon-fila",                        1 if any(p.startswith("addons/") for p in list_files(fx, want_addons=True)) else 0),
+        ("grouped callers output: file + called lines",      1 if ("grouped per file" in (g := utskrift(_dir, "take_damage", "callers", 3))
+                                                                     and "lines: L" in g and "called from" in g) else 0),
+        ("--all on callers: edge by edge (no grouping)",  1 if "grouped per file" not in utskrift(_dir, "take_damage", "callers", 3, True) else 0),
+        ("addons/ left out of the default file scope",            1 if not any(p.startswith("addons/") for p in list_files(fx)) else 0),
+        ("--addons includes the addon file",                        1 if any(p.startswith("addons/") for p in list_files(fx, want_addons=True)) else 0),
     ]
     ok = True
     for label, n in checks:
-        print(f"  {'ok  ' if n else 'FEIL'}  {label}")
+        print(f"  {'ok  ' if n else 'FAIL'}  {label}")
         ok = ok and bool(n)
     auto = con.execute("SELECT count(*) FROM nodes WHERE kind='autoload'").fetchone()[0]
-    print(f"  {'ok  ' if auto >= 2 else 'FEIL'}  autoloads funnet ({auto})")
+    print(f"  {'ok  ' if auto >= 2 else 'FAIL'}  autoloads found ({auto})")
     ok = ok and auto >= 2
     pe = con.execute("SELECT count(*) FROM unresolved WHERE reason='signal-not-found' AND name='hp_changed'").fetchone()[0]
-    print(f"  {'ok  ' if pe == 0 else 'FEIL'}  hp_changed ikke rapportert som uavklart")
+    print(f"  {'ok  ' if pe == 0 else 'FAIL'}  hp_changed not reported as unresolved")
     con.close()
-    print("selftest:", "OK" if ok else "FEIL — en parser-regel treffer ikke fixtureen. "
-                                      "Legg til regex + ny fixture, ikke ny sjekk.")
+    print("selftest:", "OK" if ok else "FAIL — a parser rule does not match the fixture. "
+                                      "Add a regex + a new fixture, not a new check.")
     return 0 if ok else 1
 
 
@@ -2072,7 +2074,7 @@ def cmd_verify(ctx) -> int:
     print()
     rc = cmd_selftest()
     if rc:
-        print("\nFEIL: selftest — parser-regler treffer ikke fixtures")
+        print("\nFAIL: selftest — parser rules do not match the fixtures")
         return 1
     print("\nverify OK")
     return st or pe
@@ -2209,39 +2211,39 @@ def _write_restore_script(bdir: Path, addon: Path) -> Path:
 def restore_backup(root: Path, addon: Path, as_json: bool) -> int:
     base = backups_root(root)
     if not base.exists():
-        print(f"Ingen backupar her: {base}")
+        print(f"No backups here: {base}")
         return 1
     latest = max([d for d in base.iterdir() if d.is_dir()], key=lambda d: d.name, default=None)
     if latest is None:
-        print(f"Tom backupmappe: {base}")
+        print(f"Empty backup folder: {base}")
         return 1
     src = latest / "codegraph"
     if not src.exists():
-        print(f"Backupen manglar codegraph-mappe: {latest}")
+        print(f"The backup is missing the codegraph folder: {latest}")
         return 1
     shutil.copytree(src, addon, dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__", ".codegraph"))
     if as_json:
         print(json.dumps({"restored_from": str(latest), "addon": str(addon)}, ensure_ascii=False))
     else:
-        print(f"Attstilte frå {latest}")
+        print(f"Restored from {latest}")
         print(f"Addon: {addon}")
-        print("Last prosjektet på nytt i Godot (Prosjekt → Last inn noverande prosjekt på nytt).")
+        print("Reload the project in Godot (Project → Reload Current Project).")
     return 0
 
 
 def _apply_update(root: Path, addon: Path, info: dict, force: bool, as_json: bool) -> int:
     if not addon.exists():
-        print(f"FEIL: fann ikkje addon-mappa {addon}")
+        print(f"ERROR: could not find the addon folder {addon}")
         return 1
     if not info.get("update_available") and not force:
-        print(f"Allereie nyaste versjon ({info.get('current') or '?'}). --apply --force skriv på nytt.")
+        print(f"Already on the latest version ({info.get('current') or '?'}). --apply --force writes it again.")
         return 0
     want = str(info.get("latest") or "")
     url = zip_url(str(info.get("tag") or ""))
     code, blob = _http_get(url, timeout=120)
     if code != 200 or not blob:
-        info["apply_error"] = f"nedlasting av {url} feila (http {code})"
+        info["apply_error"] = f"downloading {url} failed (http {code})"
         write_update_state(root, info)
         print(f"FEIL: {info['apply_error']}")
         return 1
@@ -2253,7 +2255,7 @@ def _apply_update(root: Path, addon: Path, info: dict, force: bool, as_json: boo
         with zipfile.ZipFile(zp) as z:
             names = [n for n in z.namelist() if "/addons/codegraph/" in n and "__pycache__" not in n]
             if not names:
-                print("FEIL: zippen inneheld ikkje addons/codegraph - avbryt, ingenting erendra.")
+                print("ERROR: the zip does not contain addons/codegraph - aborting, nothing was changed.")
                 return 1
             stage = tmp / "stage"
             z.extractall(stage, members=names)
@@ -2265,8 +2267,8 @@ def _apply_update(root: Path, addon: Path, info: dict, force: bool, as_json: boo
                               (src / "plugin.cfg").read_text(encoding="utf-8", errors="replace"))
                 new_ver = m.group(1) if m else ""
             if want and new_ver and new_ver != want and not force:
-                print(f"FEIL: zippen for {want} inneheld plugin.cfg {new_ver} - avbryt. "
-                      "Oppdater version.json i repoen.")
+                print(f"ERROR: the zip for {want} contains plugin.cfg {new_ver} - aborting. "
+                      "Update version.json in the repo.")
                 return 1
         # Backup FØRST, utanfor prosjektet.
         stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -2302,14 +2304,14 @@ def _apply_update(root: Path, addon: Path, info: dict, force: bool, as_json: boo
             print(json.dumps(info, ensure_ascii=False))
         else:
             print(f"CodeGraph {info['applied_from']} → {info['applied_to']}")
-            print(f"  endra filer: {len(changed)}, nye filer: {len(added)}")
+            print(f"  changed files: {len(changed)}, new files: {len(added)}")
             for f in changed[:25]:
-                print("   endra:", f)
+                print("   changed:", f)
             for f in added[:15]:
-                print("   ny   :", f)
+                print("   new:", f)
             print(f"Backup: {bdir}")
-            print(f"Angre:  {script}   (eller: kg update --restore)")
-            print("No må du laste prosjektet på nytt i Godot: Prosjekt → Last inn noverande prosjekt på nytt.")
+            print(f"Undo:   {script}   (or: kg update --restore)")
+            print("Now you must reload the project in Godot: Project → Reload Current Project.")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -2342,7 +2344,7 @@ def cmd_update(root: Path, do_apply: bool = False, restore: bool = False,
             "update_available": bool(rel["version"]) and ver_key(rel["version"]) > ver_key(cur),
             "reason": rel.get("reason", "") if not rel["version"] else "",
             "error": "" if rel["version"] else (
-                "repoen har korkje version.json i main (http %s) eller nokon tag (http %s) enno"
+                "the repo has neither version.json in main (http %s) nor any tag (http %s) yet"
                 % (rel.get("json_http", "?"), rel.get("http", "?"))),
         }
         write_update_state(root, state)
@@ -2354,17 +2356,17 @@ def cmd_update(root: Path, do_apply: bool = False, restore: bool = False,
     if as_json:
         print(json.dumps(state, ensure_ascii=False))
     else:
-        print(f"CodeGraph  installert: {cur or 'ukjend'}")
-        print(f"           nyaste kjende: {state.get('latest') or '—'}"
-              f"  (kjelde: {state.get('source') or '—'}, sjekka: {state.get('checked_at_iso') or '—'})")
+        print(f"CodeGraph  installed: {cur or 'unknown'}")
+        print(f"           latest known: {state.get('latest') or '—'}"
+              f"  (source: {state.get('source') or '—'}, checked: {state.get('checked_at_iso') or '—'})")
         if state.get("update_available"):
-            print(f" → ny versjon finst: {state['latest']}.  Kør:  kg update --apply")
+            print(f" → new version available: {state['latest']}.  Run:  kg update --apply")
         elif state.get("error"):
             print(f" → {state['error']}")
         else:
-            print(" → allereie nyaste versjon.")
+            print(" → already on the latest version.")
         if cached:
-            print(f"   (cache: svar frå nettverket for {state['age_h']} timar sidan; --force spør på nytt)")
+            print(f"   (cache: answer from the network {state['age_h']} hours ago; --force asks again)")
     if do_apply:
         return _apply_update(root, addon, state, force, as_json)
     return 0 if not state.get("error") else 2
@@ -2374,38 +2376,38 @@ def cmd_update(root: Path, do_apply: bool = False, restore: bool = False,
 # CLI
 # --------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="kg", description="Godot-kodelager (GDScript + scenes)")
-    ap.add_argument("--path", help="prosjektrot (default: opp fra cwd til project.godot)")
+    ap = argparse.ArgumentParser(prog="kg", description="Godot code graph (GDScript + scenes)")
+    ap.add_argument("--path", help="project root (default: up from cwd to project.godot)")
     ap.add_argument("--addons", action="store_true",
-                    help="ta med addons/ (tredjepart) — utelata som standard")
+                    help="include addons/ (third party) — excluded by default")
     ap.add_argument("--web", action="store_true",
-                    help="ta med web/ (JS-app) — utelata som standard")
+                    help="include web/ (JS app) — excluded by default")
     sub = ap.add_subparsers(dest="cmd")
 
-    p = sub.add_parser("index", help="bygg/oppdater indexen")
+    p = sub.add_parser("index", help="build/update the index")
     p.add_argument("--force", action="store_true")
-    sub.add_parser("status", help="helse: tellinger og parse-feil")
+    sub.add_parser("status", help="health: counts and parse errors")
     sub.add_parser("verify", help="reindex + selftest (for build_release.ps1 / CI)")
-    sub.add_parser("selftest", help="kjør fixtures")
+    sub.add_parser("selftest", help="run the fixtures")
     def add_lim(p: argparse.ArgumentParser, default: int = 25) -> argparse.ArgumentParser:
         p.add_argument("--limit", type=int, default=default,
-                       help="maks rader (default %(default)s). Summert teljing kjør alltid først.")
-        p.add_argument("--all", action="store_true", help="vis alle rader (forstyrrar utskrifta)")
+                       help="max rows (default %(default)s). The summarized count always runs first.")
+        p.add_argument("--all", action="store_true", help="show all rows (clutters the output)")
         return p
 
-    q = add_lim(sub.add_parser("symbols", help="JSON-liste av symbol (autocomplete for editoren)"), 5000)
-    q = sub.add_parser("agents", help="skriv/fjern agentinstruksjonar i prosjektróta (merkt blokk)")
-    q.add_argument("--install", action="store_true", help="installer eller oppdater blokkene")
-    q.add_argument("--remove", action="store_true", help="ta blokkene vekk att")
-    q.add_argument("--tools", help="peikefilar for verktøy som ikkje les AGENTS.md: claude,copilot,cursor")
-    q.add_argument("--force", action="store_true", help="skriv over blokka sjølv om ho er redigert for hand")
+    q = add_lim(sub.add_parser("symbols", help="JSON list of symbols (editor autocomplete)"), 5000)
+    q = sub.add_parser("agents", help="write/remove agent instructions in the project root (marked block)")
+    q.add_argument("--install", action="store_true", help="install or update the blocks")
+    q.add_argument("--remove", action="store_true", help="remove the blocks again")
+    q.add_argument("--tools", help="pointer files for tools that do not read AGENTS.md: claude,copilot,cursor")
+    q.add_argument("--force", action="store_true", help="overwrite the block even if it was edited by hand")
     q = add_lim(sub.add_parser("find"), 40)
     q.add_argument("name")
     q = add_lim(sub.add_parser("outline"))
     q.add_argument("name")
     q = add_lim(sub.add_parser("signal"))
     q.add_argument("name")
-    q = add_lim(sub.add_parser("rpc", help="alle @rpc-funksjonar (nettverkskontrakt), valdig filter"))
+    q = add_lim(sub.add_parser("rpc", help="all @rpc functions (network contract), optional filter"))
     q.add_argument("name", nargs="?")
     for c in ("callers", "callees", "deps", "impact"):
         q = add_lim(sub.add_parser(c), 15 if c in ("callers", "callees") else 25)
@@ -2417,30 +2419,30 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("path")
     q.add_argument("a")
     q.add_argument("b")
-    q = sub.add_parser("unresolved", help="hva grafen IKKE kunne løse (viktig: kandidater, ikke fasit)")
+    q = sub.add_parser("unresolved", help="what the graph could NOT resolve (important: candidates, not the answer)")
     q.add_argument("--top", type=int, default=25)
-    q = sub.add_parser("md", help="repo-kart som markdown (--files er default)")
+    q = sub.add_parser("md", help="repo map as markdown (--files is the default)")
     q.add_argument("--scope")
     q.add_argument("--budget", type=int, default=0)
-    q.add_argument("--rank", action="store_true", help="rangert etter grader (Aider-stil)")
-    q.add_argument("--signals", action="store_true", help="legg til signal-indeks")
-    q = sub.add_parser("html", help="interaktiv grafvisning i nettleser")
+    q.add_argument("--rank", action="store_true", help="ranked by degree (Aider style)")
+    q.add_argument("--signals", action="store_true", help="add a signal index")
+    q = sub.add_parser("html", help="interactive graph view in the browser")
     q.add_argument("--view", choices=["files", "signals", "ego"], default="files")
     q.add_argument("--ego")
     q.add_argument("--depth", type=int, default=2)
     q.add_argument("--limit", type=int, default=900)
     q.add_argument("--out")
     q.add_argument("--open", action="store_true")
-    q = sub.add_parser("watch", help="valgfritt: poll og reindexer (egentlig unødvendig, index er selvforfriskende)")
+    q = sub.add_parser("watch", help="optional: poll and reindex (actually unnecessary, the index refreshes itself)")
     q.add_argument("--interval", type=float, default=2.0)
 
-    q = sub.add_parser("update", help="sjekk om nyare CodeGraph-versjon finst (lesing åleine, trygt)")
+    q = sub.add_parser("update", help="check whether a newer CodeGraph version exists (reading only, safe)")
     q.add_argument("--apply", action="store_true",
-                   help="INSTALLER nyaste versjon: skriv addons/codegraph/ (backup lagast utanfor "
-                        "prosjektet) - agentar må spørje brukaren om løyve før dette")
-    q.add_argument("--restore", action="store_true", help="attstill siste backup av addonen")
-    q.add_argument("--force", action="store_true", help="hopp over 24-timers cache / tillat same versjon")
-    q.add_argument("--json", action="store_true", help="maskinlesbart eittlinje-JSON")
+                   help="INSTALL the latest version: writes addons/codegraph/ (a backup is kept outside "
+                        "the project) - agents must ask the user for permission before doing this")
+    q.add_argument("--restore", action="store_true", help="restore the latest backup of the addon")
+    q.add_argument("--force", action="store_true", help="skip the 24-hour cache / allow the same version")
+    q.add_argument("--json", action="store_true", help="machine-readable one-line JSON")
 
     a = ap.parse_args()
     root = find_root(a.path)
