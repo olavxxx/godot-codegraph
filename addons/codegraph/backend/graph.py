@@ -1653,7 +1653,7 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) 
     # status (default)
     alle = ["AGENTS.md"] + list(POINTER_TARGETS.values())
     funnen = [rel for rel in alle if (root / rel).exists() and _has_block(_read_keep(root / rel)[0])]
-    print("agentinstruksjonar: " + ("installert (" + ", ".join(finnen) + ")" if funnen else "ikkje installert"))
+    print("agentinstruksjonar: " + ("installert (" + ", ".join(funnen) + ")" if funnen else "ikkje installert"))
     if not funnen:
         print("  kg agents --install          # AGENTS.md")
         print("  kg agents --install --tools claude,copilot,cursor")
