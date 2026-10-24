@@ -1,6 +1,24 @@
-[gd_scene load_steps=2 format=3 uid="uid://b1codegraphdock"]
+[gd_scene load_steps=4 format=3 uid="uid://b1codegraphdock"]
 
 [ext_resource type="Script" path="res://addons/codegraph/codegraph_dock.gd" id="1_dock"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_txt"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(1, 1, 1, 0.055)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 1, 1, 0.14)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
 
 [node name="CodeGraphDock" type="PanelContainer"]
 anchors_preset = 15
@@ -152,9 +170,13 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 focus_mode = 2
 theme_override_colors/default_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/normal_font_size = 14
+theme_override_constants/table_h_separation = 12
+theme_override_constants/table_v_separation = 4
 bbcode_enabled = true
 selection_enabled = true
 context_menu_enabled = true
+autowrap_mode = 3
 
 [node name="GraphTab" type="VBoxContainer" parent="MainTabs"]
 unique_name_in_owner = true
@@ -296,6 +318,22 @@ custom_minimum_size = Vector2(200, 34)
 layout_mode = 2
 text = "▶ Open Neighborhood"
 
+[node name="EgoAccBox" type="PanelContainer" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+
+[node name="EgoAccList" type="ItemList" parent="MainTabs/GraphTab/GraphScroll/CardsBox/CardEgo/BoxEgo/EgoAccBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 2
+max_visible_items = 6
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_colors/font_selected_color = Color(1, 0.82, 0.4, 1)
+
 [node name="TipsPanel" type="PanelContainer" parent="MainTabs/GraphTab"]
 layout_mode = 2
 
@@ -306,6 +344,481 @@ theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
 theme_override_font_sizes/font_size = 12
 text = "💡 Browser Shortcuts: / to search, F to fit, L for labels, Drag to pan, Scroll to zoom, Click node for inspector."
 autowrap_mode = 2
+
+[node name="AgentsTab" type="VBoxContainer" parent="MainTabs"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+metadata/_tab_index = 3
+
+[node name="AgentsToolbar" type="HBoxContainer" parent="MainTabs/AgentsTab"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="AgentsTitleLabel" type="Label" parent="MainTabs/AgentsTab/AgentsToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 14
+text = "AI agents, license and links"
+
+[node name="AgentsLangButton" type="Button" parent="MainTabs/AgentsTab/AgentsToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "🌐 EN"
+
+[node name="AgentsScroll" type="ScrollContainer" parent="MainTabs/AgentsTab"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 1
+
+[node name="AgentsCards" type="VBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="CardTeach" type="PanelContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="BoxTeach" type="VBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TeachCardTitle" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/font_size = 15
+text = "🤖 Teach my AI agents about CodeGraph"
+
+[node name="TeachToggleRow" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="AgentsTeach" type="CheckButton" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach/TeachToggleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 14
+
+[node name="TeachStateLabel" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach/TeachToggleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="TeachExpandBtn" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach/TeachToggleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 12
+text = "▸ Show details"
+
+[node name="TeachHelp" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="TeachSizeLabel" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 3
+
+[node name="TeachWarn" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="TeachFilesLabel" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.62, 0.72, 0.82, 1)
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="TeachActions" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BenchFromAgentsButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardTeach/BoxTeach/TeachActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(250, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "▶ Run the benchmark first"
+
+[node name="CardPython" type="PanelContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="BoxPython" type="VBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PyCardTitle" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.9, 0.42, 1)
+theme_override_font_sizes/font_size = 14
+text = "Machine requirements"
+
+[node name="PyHeadRow" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PySummary" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyHeadRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_colors/default_color = Color(0.55, 0.9, 0.42, 1)
+theme_override_font_sizes/normal_font_size = 14
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
+[node name="UpdChip" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyHeadRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+focus_mode = 0
+theme_override_colors/default_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/normal_font_size = 14
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+
+[node name="PyExpandBtn" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyHeadRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 12
+text = "▸ Show details"
+
+[node name="PyHelp" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="PyTable" type="GridContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 2
+theme_override_constants/h_separation = 14
+theme_override_constants/v_separation = 3
+
+[node name="PyKVer" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyVVer" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyKCmd" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyVCmd" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyKExe" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyVExe" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyKGodot" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyVGodot" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyKPlugin" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyVPlugin" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyKUpd" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyVUpd" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyKChecked" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyVChecked" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyTable"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="PyStatus" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.55, 0.9, 0.42, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="PyInstallHint" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(1, 0.82, 0.4, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="PyCopyRow" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PyCopyButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyCopyRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 12
+text = "📋 Copy install command"
+
+[node name="PyActions" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PyCheckButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Check Python again"
+
+[node name="PyDownloadButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/PyActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "🐍 Download Python"
+
+[node name="GitiStatus" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.549, 0.898, 0.424, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="GitiFixRow" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="GitiFixButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/GitiFixRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "🛠 Add to .gitignore"
+
+[node name="UpdStatus" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+visible = false
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="UpdAgentNote" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.427, 0.51, 0.588, 1)
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="UpdActions" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="UpdCheckButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/UpdActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "🔍 Check for update"
+
+[node name="UpdApplyButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardPython/BoxPython/UpdActions"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "⬇ Update"
+
+[node name="CardAbout" type="PanelContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="BoxAbout" type="VBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardAbout"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AboutTitle" type="Label" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardAbout/BoxAbout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.31, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "License, source and feedback"
+
+[node name="AboutText" type="RichTextLabel" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardAbout/BoxAbout"]
+unique_name_in_owner = true
+theme_override_styles/normal = SubResource("StyleBoxEmpty_txt")
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_colors/default_color = Color(0.812, 0.89, 0.961, 1)
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="AboutActions" type="HBoxContainer" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardAbout/BoxAbout"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="RepoButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardAbout/BoxAbout/AboutActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "🌐 GitHub repository"
+
+[node name="IssuesButton" type="Button" parent="MainTabs/AgentsTab/AgentsScroll/AgentsCards/CardAbout/BoxAbout/AboutActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 34)
+layout_mode = 2
+size_flags_horizontal = 0
+text = "🐙 Report an issue / wish"
 
 [node name="WelcomePanel" type="PanelContainer" parent="."]
 unique_name_in_owner = true

@@ -161,9 +161,56 @@ It writes a block delimited by `<!-- BEGIN CODEGRAPH -->` / `<!-- END CODEGRAPH 
 
 Guarantees: everything is inside the markers, so your own text is never touched; a file you already wrote is skipped, not overwritten; re-running only updates the block; `--remove` takes it all out again (and deletes pointer files that contained nothing else). These files are meant to be committed.
 
-No terminal needed: tick **“Teach my AI agents about CodeGraph”** on the plugin's welcome card. While nothing is installed, `kg status` prints a one-line hint about the command.
+No terminal needed: open the **🤖 Agents & Info** tab in the dock and tick **“Teach my AI agents about CodeGraph”** (the same tick box also sits on the search toolbar and on the welcome card). That tab also spells out exactly which files are written, tells you to run the benchmark first if the project is small, and links to the repository and the issue tracker. While nothing is installed, `kg status` prints a one-line hint about the command.
 
 ---
+
+## 🔁 Staying up to date (`kg update`)
+
+The plugin checks for a newer version by itself, at most once a day, and shows the result as a small chip on the **⚙️ Machine requirements and updates** card: green `✓ latest`, amber `⚠ 1.1.0 out`, or grey `– no releases yet`. Press **🔍 Check for update** to ask right now; press **⬇ Update to &lt;version&gt;** (twice — the second press is the confirmation) to install it.
+
+Same commands in a terminal:
+
+```powershell
+python addons/codegraph/backend/graph.py update              # read-only check, prints the answer
+python addons/codegraph/backend/graph.py update --json       # one line for scripts and AI agents
+python addons/codegraph/backend/graph.py update --apply      # install (asks for approval in AGENTS.md)
+python addons/codegraph/backend/graph.py update --restore    # undo with the newest backup
+```
+
+How it works, and why it needs no GitHub token, no release uploads and no AssetLib:
+
+- **Version source:** `version.json` in the repo root on `main` (fetched from raw.githubusercontent.com). If that file is missing, the newest **tag** is used instead, so `git tag v1.1.0 && git push --tags` is all a release has to be. GitHub automatically produces the archive `…/archive/refs/tags/v1.1.0.zip` for every tag — the same artifact the AssetLib downloads — and that zip is what gets installed.
+- **Nothing is written without permission.** `update` with no flags only reads; the answer (including *when* it last checked) is cached in `.codegraph/update.json` for 24 hours.
+- **Install is done by the standalone Python backend, never by the addon itself.** If a new file somehow fails to load in the editor, `kg update --restore` (and a `restore.bat` / `restore.sh` next to the backup) still works.
+- **Backup lives outside the project:** `~/.codegraph_backups/<project>-<hash>/<timestamp>/codegraph`, so it is never committed and survives replacing the addon folder. Only files under `addons/codegraph/` are replaced; `__pycache__` and your `.codegraph/` index are left alone. After an install, reload the project in Godot.
+- **Agents:** the block `kg agents --install` writes into `AGENTS.md` now tells agents that `kg update` is safe to run, but that `kg update --apply` requires asking you first.
+- **Forks:** set `KG_REPO=youruser/yourrepo` and everything (version file, tag list, zip) comes from your fork instead.
+- **Your `AGENTS.md` is kept in step.** After an install, the *new* `graph.py` rewrites the CodeGraph block in `AGENTS.md` (and `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/codegraph.mdc` if they exist) — nothing is toggled off, and a block you have hand-edited is left alone.
+- **Your index stays out of git.** The same card checks that `.gitignore` has a rule for `.codegraph/` (the database, cache and update state are machine-local, and `kg update` refuses to touch them). Missing? One press adds the rule at the end of the file and leaves everything else in it alone.
+
+### Versioning and tagging, in one minute
+
+| what | where | who reads it |
+| --- | --- | --- |
+| `version = "1.1.0"` | `addons/codegraph/plugin.cfg` | the plugin itself — this is what `kg update` compares against |
+| `"version": "1.1.0", "tag": "v1.1.0"` | `version.json` in the repo root, on `main` | `kg update` — the published version, and which zip to download |
+| `v1.1.0` | a git **tag** pushed to the repo | the fallback when `version.json` is missing, and the source of the zip |
+
+The three must agree. Numbers compare **numerically** (`1.10.0` is newer than `1.9.0`), so use plain `major.minor.patch`: patch = fixes only, minor = new buttons/commands, major = something moved or the index format changed (`SCHEMA_VERSION` in `graph.py` — bump it and the plugin reindexes by itself next time).
+
+To ship a release:
+
+```powershell
+# 1. set the same number in addons/codegraph/plugin.cfg and version.json ("version" + "tag")
+# 2. commit and tag:
+git add -A
+git commit -m "release: 1.1.0"
+git tag v1.1.0
+git push origin main --tags
+```
+
+That is the whole release. Within a minute every project on an older version shows the amber `⚠ 1.1.0 out` chip. No GitHub Release is required — if you do publish one, point `"notes"` at it and the dock shows the link. If a release turns out broken: `git tag -d v1.1.0`, fix forward with a new patch number, and users can always `kg update --restore`.
 
 ## 📜 License & Credits
 
