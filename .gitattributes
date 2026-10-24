@@ -4,3 +4,6 @@
 # has to carry ~3 MB of pictures along with the addon.
 screenshots/** export-ignore
 assetlib/** export-ignore
+
+# tools/ is how we make those copies; a person installing the addon does not need it.
+tools/** export-ignore

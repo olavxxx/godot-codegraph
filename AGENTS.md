@@ -44,6 +44,11 @@ fix forward.
 - UI text exists in **both** `en` and `no` blocks in `codegraph_dock.gd` (STRINGS). Keep the
   key sets identical — no key in one language only. Norwegian is Nynorsk-flavoured Bokmål,
   matching the existing strings.
+- `addons/codegraph/README.md` and `addons/codegraph/LICENSE` are **generated copies** — the
+  Asset Library wants the license next to the plugin, and a user keeps only the addon folder.
+  Never edit them: change the root `README.md`/`LICENSE`, then run
+  `python tools/sync_addon_docs.py`. Users pick the copies up on the next `kg update`, which
+  copies every file under `addons/codegraph/` out of the tag archive.
 - `.codegraph/` (index, cache, update state) must never be committed; agent files
   (`AGENTS.md` and friends) are meant to be committed.
 - Never let `kg update --apply` run inside this repo while it has uncommitted work: the
@@ -57,6 +62,7 @@ fix forward.
 godot --headless --path . --check-only --script res://addons/codegraph/codegraph_dock.gd
 python -m py_compile addons/codegraph/backend/graph.py
 python addons/codegraph/backend/graph.py --path . selftest
+python tools/sync_addon_docs.py --check    # the README/LICENSE copies in the addon must match
 ```
 
 Do not round-trip `.gd`/`.tscn` files through PowerShell text pipelines — it mangles the
