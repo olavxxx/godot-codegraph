@@ -192,6 +192,11 @@ const STRINGS = {
 		"btn_upd_check": "🔍 Check for update",
 		"btn_upd_apply": "⬇ Update to %s",
 		"btn_upd_confirm": "⬇ Press again to install",
+		"upd_head_applying": "⏳ installing",
+		"btn_upd_busy": "⏳ Installing %s",
+		"upd_installing": "[b]Installing %s.[/b] Downloading the GitHub archive and writing [b]addons/codegraph/[/b] - the backup and [b]restore.bat[/b] are made [i]outside[/i] the project first. Keep the editor open, and do not press again while it works.",
+		"upd_apply_failed": "Could not install %s: %s The plugin itself was not touched - the backup and the undo script are outside the project.",
+		"upd_exit_code": "kg update --apply stopped with exit code %d",
 		"upd_up_to_date": "Already on the newest version (%s). Nothing was changed.",
 		"upd_found": "[b]%s[/b] is out. Nothing is written until you press the update button - and a backup plus a [b]restore.bat[/b] are made [i]outside[/i] the project first.",
 		"upd_applied": "[b]Installed %s.[/b] Reload the project in Godot now: Project → Reload Current Project.\n[dim]Backup and undo script:[/dim] %s",
@@ -343,6 +348,11 @@ const STRINGS = {
 		"btn_upd_check": "🔍 Sjekk for oppdatering",
 		"btn_upd_apply": "⬇ Oppdater til %s",
 		"btn_upd_confirm": "⬇ Trykk igjen for å installere",
+		"upd_head_applying": "⏳ installerer",
+		"btn_upd_busy": "⏳ Installerer %s",
+		"upd_installing": "[b]Installerer %s.[/b] Lastar ned GitHub-arkivet og skriv [b]addons/codegraph/[/b] - backup og [b]restore.bat[/b] blir laga [i]utanfor[/i] prosjektet først. Hald editoren open, og ikkje trykk ein gong til medan han jobbar.",
+		"upd_apply_failed": "Kunne ikkje installere %s: %s Sjølve pluginen blei ikkje rør - backup og angra-skript ligg utanfor prosjektet.",
+		"upd_exit_code": "kg update --apply stoppa med exit-kode %d",
 		"upd_up_to_date": "Allereie nyaste versjon (%s). Ingenting blei endra.",
 		"upd_found": "[b]%s[/b] finst. Ingenting blir skrive før du trykkjer på oppdater-knappen - og backup pluss [b]restore.bat[/b] blir laga [i]utanfor[/i] prosjektet først.",
 		"upd_applied": "[b]Installerte %s.[/b] Last prosjektet på nytt i Godot no: Prosjekt → Last inn noverande prosjekt på nytt.\n[dim]Backup og angra-skript:[/dim] %s",
@@ -500,6 +510,12 @@ var upd_timer: Timer = null
 var upd_apply_armed: bool = false
 var upd_arm_timer: Timer = null
 var upd_busy_text: String = ""
+var upd_applying: bool = false   # éin installasjon om gongen - elles kan knappen spammast
+var upd_spin: int = 0            # teljar for spinneren i knappeksten medan jobben går
+var upd_fail_note: String = ""   # siste installasjonsfeil, visast til noko nytt blir forsøkt
+var update_exit: int = 0         # exit-koden til siste kg-ting i tråden
+var update_out: Array = []       # stdout/nedre del av feilmelding, berre lesen etter wait_to_finish
+const SPIN_FRAMES = ["|", "/", "-", "\\"]
 const UPDATE_STATE_PATH = "res://.codegraph/update.json"   # same fil som kg update skriv
 const CHECK_TTL_H = 20.0     # editoren startar ofte - éin nettverkssjekk per dag held
 # Kva som bør liggje URØRT i git: indexen og cachen våre.
@@ -1179,7 +1195,10 @@ func _refresh_update_card() -> void:
 	var col: Color = C_DIM
 	var latest: String = String(update_state.get("latest", ""))
 	var busy: bool = update_thread != null and update_thread.is_alive()
-	if busy:
+	if upd_applying:
+		head = t("upd_head_applying")
+		col = C_HOT
+	elif busy:
 		head = t("upd_checking")
 	elif update_state.is_empty():
 		head = t("upd_head_never")
@@ -1202,11 +1221,19 @@ func _refresh_update_card() -> void:
 	val_checked.text = stamp if not stamp.is_empty() else t("upd_never")
 	if upd_check_button:
 		upd_check_button.disabled = busy
-		upd_check_button.text = t("upd_checking") if busy else t("btn_upd_check")
+		upd_check_button.text = (_spin_frame() + " " + t("upd_checking")) if busy else t("btn_upd_check")
 	if upd_apply_button:
-		var can: bool = (not busy) and bool(update_state.get("update_available", false))
-		upd_apply_button.visible = can
-		upd_apply_button.text = t("btn_upd_confirm") if upd_apply_armed else (t("btn_upd_apply") % latest)
+		if upd_applying:
+			# Knappen blir verande synleg medan jobben går, men slått av: ingen
+			# skal kunne trykkje seg gjennom same zippen gong på gong.
+			upd_apply_button.visible = true
+			upd_apply_button.disabled = true
+			upd_apply_button.text = _spin_frame() + " " + (t("btn_upd_busy") % latest)
+		else:
+			var can: bool = (not busy) and bool(update_state.get("update_available", false))
+			upd_apply_button.disabled = false
+			upd_apply_button.visible = can
+			upd_apply_button.text = t("btn_upd_confirm") if upd_apply_armed else (t("btn_upd_apply") % latest)
 	# Kortet hoppar ut sjølv om brukaren ikkje har valt noko, når det finst noko å sjå
 	if busy:
 		upd_status.text = upd_busy_text
@@ -1222,8 +1249,13 @@ func _refresh_update_card() -> void:
 		elif bool(update_state.get("update_available", false)):
 			upd_status.text = t("upd_found") % latest
 			upd_status.visible = true
-		elif upd_busy_text == t("btn_upd_apply"):
-			upd_status.text = t("upd_up_to_date") % String(update_state.get("current", ""))
+		elif _just_installed() != "":
+			# «Installerte X» blir ståande heilt til neste reelle sjekk, så brukaren
+			# ser kva som skjedde sjølv om han lastar prosjektet først etterpå.
+			upd_status.text = t("upd_applied") % [_just_installed(), String(update_state.get("backup", ""))]
+			upd_status.visible = true
+		elif upd_fail_note != "":
+			upd_status.text = t("upd_apply_failed") % [latest, upd_fail_note]
 			upd_status.visible = true
 		else:
 			upd_status.text = ""
@@ -1244,16 +1276,45 @@ func _run_update_worker(extra: Array[String]) -> void:
 	var args: Array = [backend_path, "--path", root_dir, "update", "--json"]
 	args.append_array(extra)
 	var out: Array = []
-	OS.execute(python_cmd, args, out, true)
+	var code: int = OS.execute(python_cmd, args, out, true)
+	# Desse to berre blir lesen etter wait_to_finish(), aldri samstundes med tråden.
+	update_out = out
+	update_exit = code
+
+func _spin_frame() -> String:
+	return SPIN_FRAMES[upd_spin % SPIN_FRAMES.size()]
+
+# Spinneren går på same poll-timeren som ser om tråden er ferdig, så han stoppar
+# av seg sjølv når jobben er slutt - ingen timer som går i det stille.
+func _spin_busy_labels() -> void:
+	var latest: String = String(update_state.get("latest", ""))
+	if upd_apply_button != null and upd_applying:
+		upd_apply_button.text = _spin_frame() + " " + (t("btn_upd_busy") % latest)
+	if upd_check_button != null and update_thread != null and update_thread.is_alive():
+		upd_check_button.text = _spin_frame() + " " + t("upd_checking")
+		upd_check_button.disabled = true
+
+# Er installasjonen i statefila nyare enn sjekken som høyrer til?  Då er
+# «Installerte X» framleis sant å vise, og knappen er borte av seg sjølv.
+func _just_installed() -> String:
+	if not update_state.has("applied_to"):
+		return ""
+	if float(update_state.get("applied_at", 0.0)) < float(update_state.get("checked_at", 0.0)):
+		return ""
+	return String(update_state.get("applied_to", ""))
 
 func _start_update_check(extra: Array[String], note: String) -> void:
 	if not python_ok:
+		upd_applying = false
 		upd_busy_text = t("err_python")
 		_refresh_update_card()
 		return
 	if update_thread != null and update_thread.is_alive():
 		return
 	upd_busy_text = note
+	upd_spin = 0
+	update_out = []
+	update_exit = 0
 	if upd_apply_armed:
 		upd_apply_armed = false
 	_refresh_update_card()
@@ -1272,21 +1333,44 @@ func _on_update_poll() -> void:
 			upd_timer.stop()
 		return
 	if update_thread.is_alive():
+		upd_spin += 1
+		_spin_busy_labels()
 		return
 	update_thread.wait_to_finish()
 	update_thread = null
 	if upd_timer:
 		upd_timer.stop()
+	var was_apply: bool = upd_applying
+	upd_applying = false
 	_load_update_state()
+	if was_apply:
+		# Statefila seier no kva versjon som faktisk ligg på disken (backenden
+		# les plugin.cfg på nytt etter installasjonen).  Er det ikkje installert
+		# noko, skal brukaren få vite kvifor - ikkje ei falsk grøn luke.
+		var err: String = String(update_state.get("apply_error", ""))
+		if _just_installed() != "":
+			upd_fail_note = ""
+		elif not err.is_empty():
+			upd_fail_note = err
+		elif update_exit != 0:
+			upd_fail_note = t("upd_exit_code") % update_exit
+		else:
+			upd_fail_note = ""
 	_refresh_update_card()
 
 func _on_upd_check_pressed() -> void:
+	if upd_applying or (update_thread != null and update_thread.is_alive()):
+		return
+	upd_fail_note = ""
 	_start_update_check(["--force"], t("upd_checking"))
 
 # To trykk = stadfesting, utan dialogboks som ligg fast i editoren.
 func _on_upd_apply_pressed() -> void:
+	if upd_applying:
+		return      # jobbar allereie: knappen er slått av, men doble klikk kan likevel kome fram
 	if not upd_apply_armed:
 		upd_apply_armed = true
+		upd_fail_note = ""
 		_refresh_update_card()
 		if upd_arm_timer == null:
 			upd_arm_timer = Timer.new()
@@ -1297,20 +1381,16 @@ func _on_upd_apply_pressed() -> void:
 		upd_arm_timer.start()
 		return
 	upd_apply_armed = false
-	_start_update_check(["--apply", "--force"], t("upd_checking"))
+	upd_applying = true
+	if upd_arm_timer:
+		upd_arm_timer.stop()
+	_start_update_check(["--apply", "--force"], t("upd_installing") % String(update_state.get("latest", "")))
 
 func _disarm_update() -> void:
+	if upd_applying:
+		return      # armings-timaren skal ikkje endre knappane medan installasjonen går
 	upd_apply_armed = false
 	_refresh_update_card()
-
-# Eitt døgn gammal sjekk er gammalt nok: editoren startar ofte, så dette må
-# vere stille, asynkront og berre éin gong per dag.
-	const UPDATE_STATE_PATH = "res://.codegraph/update.json"   # same fil som kg update skriv
-	const CHECK_TTL_H = 20.0
-	if Engine.is_editor_hint() and python_ok:
-		var age: float = _upd_age_h()
-		if age >= CHECK_TTL_H:
-			_start_update_check([], t("upd_checking"))
 
 # Installerer du Python medan editoren går, trengst ingen omstart: knappen
 # gjenopprettar heile tilstanden - knappar, status, indeks og agentfane.

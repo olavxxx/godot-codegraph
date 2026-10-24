@@ -2223,6 +2223,14 @@ def restore_backup(root: Path, addon: Path, as_json: bool) -> int:
         return 1
     shutil.copytree(src, addon, dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns("__pycache__", ".codegraph"))
+    # Resten må òg skrive om stateen: addonen er den gamle att, og elles ville
+    # editoren halde på å seie «allereie nyaste» med ein gammal addon på disken.
+    st = read_update_state(root)
+    no_ver = local_version()
+    st["current"] = no_ver
+    if st.get("latest"):
+        st["update_available"] = ver_key(str(st["latest"])) > ver_key(no_ver)
+    write_update_state(root, st)
     if as_json:
         print(json.dumps({"restored_from": str(latest), "addon": str(addon)}, ensure_ascii=False))
     else:
@@ -2297,6 +2305,13 @@ def _apply_update(root: Path, addon: Path, info: dict, force: bool, as_json: boo
             "backup": str(bdir), "restore": str(script),
             "changed": changed, "added": added,
         })
+        # Stateen må skildre pluginen som han ER på disken no, ikkje som han var
+        # da sjekken starta. Editoren les denne fila rett etter installasjonen, og
+        # eit gamalt «update_available: true» lét oppdateringsknappen stå arma for
+        # alltid - brukaren kan då installere same zippen om att og om att.
+        no_ver = local_version() or (new_ver or want)
+        info["current"] = no_ver
+        info["update_available"] = bool(want) and ver_key(want) > ver_key(no_ver)
         # 4. nye versjonen sine agentfilversjonar (kun der blokk alt finst)
         info["agent_files"] = refresh_agent_files_after_update(root, as_json)
         write_update_state(root, info)

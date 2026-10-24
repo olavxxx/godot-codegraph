@@ -169,6 +169,8 @@ No terminal needed: open the **🤖 Agents & Info** tab in the dock and tick **�
 
 The plugin checks for a newer version by itself, at most once a day, and shows the result as a small chip on the **⚙️ Machine requirements and updates** card: green `✓ latest`, amber `⚠ 1.1.0 out`, or grey `– no releases yet`. Press **🔍 Check for update** to ask right now; press **⬇ Update to &lt;version&gt;** (twice — the second press is the confirmation) to install it.
 
+While the install runs, that button turns into a disabled **⏳ Installing 1.1.4** with a spinner, so it cannot be pressed again and the editor stays responsive. When it is done, the chip is green again, the update button is gone, the card says which version was installed and where the backup is, and `kg update` reports the version that is actually on disk — not the one the plugin remembered before the install.
+
 Same commands in a terminal:
 
 ```powershell
