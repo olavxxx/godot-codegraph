@@ -2171,8 +2171,18 @@ func _acc_take_inline(field: LineEdit, box: PanelContainer) -> void:
 	box.visible = false
 	_acc_state[field] = field.text
 
-func _on_search_text_changed(_new_text: String) -> void:
+func _on_search_text_changed(new_text: String) -> void:
 	_acc_update(search_input, autocomplete_list, autocomplete_box)
+	if new_text.strip_edges().is_empty():
+		_reset_search_results()
+
+# X-knappen (eller backspace heilt ut) skal ta med svaret som står att. Utan dette
+# blir det ståande eit svar frå før, og brukaren trudar det er svaret på det tomme feltet.
+func _reset_search_results() -> void:
+	if not is_instance_valid(output_display) or output_display.text.is_empty():
+		return
+	output_display.clear()
+	status_label.text = t("enter_term")
 
 func _on_ego_text_changed(_new_text: String) -> void:
 	_acc_update(ego_input, ego_acc_list, ego_acc_box)
