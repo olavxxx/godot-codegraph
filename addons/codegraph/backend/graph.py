@@ -1536,27 +1536,28 @@ def agents_block(root: Path) -> str:
     kg = kg_rel(root)
     lines = [
         AGENTS_BEGIN,
-        "## CodeGraph — query the graph before grep",
+        "## ⚡ MANDATORY: CodeGraph — query the graph before ANY grep or file reading",
         "",
-        "Code graph over `.gd` / `.tscn` / `.tres` / `@rpc` / autoloads, in `.codegraph/graph.db`.",
-        "It is always current — never run an `index` command first. `kg status` prints live counts",
-        "and the file scope (some folders are out by default); every query prints a count + top N.",
+        "CRITICAL WORKFLOW RULE FOR AI AGENTS:",
+        "Do NOT use `grep_search` across the codebase or read entire `.gd` files into context.",
+        f"ALWAYS query `{kg}/kg.bat` (or `./{kg}/kg` on Linux/macOS) first for symbol lookup, class outlines, callers, signals, and dependencies.",
         "",
+        "### Intent -> Command Cheat Sheet:",
         "```",
-        f"{kg}/kg.bat status                    # counts, unresolved refs, file scope",
-        f"{kg}/kg.bat find NAME                 # name -> class/fn/signal, file:line",
-        f"{kg}/kg.bat outline NAME              # signals/fields/funcs + line numbers (skip reading files)",
-        f"{kg}/kg.bat callers NAME              # callers grouped per file",
-        f"{kg}/kg.bat signal NAME               # declaration + emissions + receivers (.gd AND .tscn)",
-        f"{kg}/kg.bat rpc                       # every @rpc handler: mode + call-site count",
-        f"{kg}/kg.bat impact NAME --depth 2     # what a change touches -> what to test",
-        f"{kg}/kg.bat deps FILE --reverse       # what depends on a file",
-        f"{kg}/kg.bat md --scope WORD --budget 1200   # repo map inside a token budget",
+        f"Find a class, function, or signal:         {kg}/kg.bat find <name>",
+        f"Inspect a file (WITHOUT reading it all):   {kg}/kg.bat outline <script>",
+        f"Find who calls a method across files:      {kg}/kg.bat callers <method>",
+        f"Trace signal emitters & .tscn listeners:   {kg}/kg.bat signal <signal>",
+        f"Check network RPC handlers:                {kg}/kg.bat rpc",
+        f"Check impact BEFORE editing a class:       {kg}/kg.bat impact <class> --depth 2",
+        f"See what depends on a file:                {kg}/kg.bat deps <file> --reverse",
+        f"Get a token-budgeted repo map:             {kg}/kg.bat md --budget 1200",
+        f"Check graph status and counts:             {kg}/kg.bat status",
         "```",
         "",
-        "Candidates, not proof: `get_node(var)`, `%UniqueName`, string-named groups and lambda",
-        "`connect()` are dynamic — use grep + `godot --headless --check-only` + an actual run.",
-        "On Linux/macOS use `./" + kg + "/kg` instead of `kg.bat`.",
+        "Candidates, not proof: dynamic calls (`get_node(var)`, `%UniqueName`, string-named groups, lambda `connect()`)",
+        "are verified with targeted grep + `godot --headless --check-only` + an actual run.",
+        f"On Linux/macOS use `./{kg}/kg` instead of `kg.bat`.",
         AGENTS_END,
     ]
     return "\n".join(lines) + "\n"
@@ -1564,8 +1565,8 @@ def agents_block(root: Path) -> str:
 
 def _wrap(text: str) -> str:
     """Peikefil: berre blokkmerke + to linjer, så --remove kan kjenne att fila som vår."""
-    return (AGENTS_BEGIN + "\n# AI agents: read `AGENTS.md` in this folder first — it documents the "
-            "CodeGraph indexer for this project.\n" + AGENTS_END + "\n")
+    return (AGENTS_BEGIN + "\n# AI agents: DO NOT grep or read full files. Read `AGENTS.md` in this folder first —\n"
+            "# it documents the CodeGraph indexer (`kg.bat`) which you MUST query before any file inspection.\n" + AGENTS_END + "\n")
 
 
 def _has_block(txt: str) -> bool:

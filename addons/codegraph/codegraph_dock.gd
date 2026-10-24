@@ -984,7 +984,7 @@ func _teach_button_text() -> void:
 
 func _teach_agents(on: bool) -> bool:
 	var args = [backend_path, "--path", ProjectSettings.globalize_path("res://"), "agents",
-			"--install" if on else "--remove"]
+			"--install" if on else "--remove", "--tools", "claude,copilot,cursor"]
 	var out: Array = []
 	var ec = OS.execute(python_cmd, args, out, true)
 	if ec == 0:
