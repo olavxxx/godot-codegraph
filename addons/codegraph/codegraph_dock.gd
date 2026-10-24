@@ -80,6 +80,10 @@ const STRINGS = {
 		"welcome_title": "Welcome to CodeGraph",
 		"welcome_desc": "Your project has not been indexed yet. Initial indexing takes only a few seconds and enables instant symbol navigation, scene signal wires, and @rpc mapping.",
 		"btn_index_now": "⚡ Build Initial Index",
+		"agent_teach": "Teach my AI agents about CodeGraph (writes a marked block into AGENTS.md)",
+		"agents_on": "Agent instructions written to AGENTS.md — commit that file.",
+		"agents_off": "Agent instructions removed from AGENTS.md.",
+		"agents_fail": "Could not update the agent instructions:",
 		"ready": "CodeGraph ready. Select a mode and search.",
 		"indexing": "Indexing in progress...",
 		"bench_running": "Running real-world benchmark against grep...",
@@ -146,6 +150,10 @@ const STRINGS = {
 		"welcome_title": "Velkommen til CodeGraph",
 		"welcome_desc": "Dette prosjektet er ikke indeksert ennå. Første indeksering tar bare noen sekunder og gir deg lynrask kode- og signalnavigasjon.",
 		"btn_index_now": "⚡ Bygg indeks nå",
+		"agent_teach": "Lær AI-agentane mine om CodeGraph (skriv ein merkt blokk i AGENTS.md)",
+		"agents_on": "Agentinstruksjonar skrivne i AGENTS.md — committ fila.",
+		"agents_off": "Agentinstruksjonar fjerna frå AGENTS.md.",
+		"agents_fail": "Klarte ikkje å oppdatere agentinstruksjonane:",
 		"ready": "CodeGraph klar. Velg modus og skriv inn søkeord.",
 		"indexing": "Indekserer prosjektet...",
 		"bench_running": "Kjører ytelsestest mot grep...",
@@ -183,6 +191,7 @@ var lang: String = "en"
 @onready var index_now_button: Button = %IndexNowButton
 @onready var welcome_progress: ProgressBar = %WelcomeProgress
 @onready var welcome_status: Label = %WelcomeStatus
+@onready var agent_teach: CheckButton = %AgentTeach
 
 # Søkefane
 @onready var search_input: LineEdit = %SearchInput
@@ -336,6 +345,8 @@ func _set_backend_enabled(on: bool) -> void:
 			open_files_button, open_signals_button, open_ego_button]:
 		if b:
 			b.disabled = not on
+	if agent_teach:
+		agent_teach.visible = on
 
 func _setup_ui() -> void:
 	# Tab titler
@@ -396,6 +407,13 @@ func _setup_ui() -> void:
 		index_now_button.pressed.connect(_on_index_now_pressed)
 	welcome_progress.visible = false
 	welcome_status.visible = false
+	# Agentopplæring: tilstanden blir lest frå disken, ikkje hugsa i minnet.
+	agent_teach.text = t("agent_teach")
+	agent_teach.set_block_signals(true)
+	agent_teach.button_pressed = _agents_installed()
+	agent_teach.set_block_signals(false)
+	if not agent_teach.toggled.is_connected(_on_agent_teach):
+		agent_teach.toggled.connect(_on_agent_teach)
 	search_progress.visible = false
 	bench_progress.visible = false
 	
@@ -938,3 +956,26 @@ func _on_autocomplete_selected(index: int) -> void:
 	autocomplete_box.visible = false
 	last_typed = search_input.text
 	_on_search_pressed()
+
+# --- Agentopplæring: la agenten i prosjektet vite at CodeGraph finst ---
+# Bakenden eig alt innhaldet (med tala frå dette prosjektet) og skriv berre
+# inne i merka blokker. Editoren skriv difor aldri brukaren sin eigen tekst.
+func _agents_installed() -> bool:
+	if not FileAccess.file_exists("res://AGENTS.md"):
+		return false
+	return "BEGIN CODEGRAPH" in FileAccess.get_file_as_string("res://AGENTS.md")
+
+func _on_agent_teach(on: bool) -> void:
+	if not python_ok:
+		return
+	var args = [backend_path, "--path", ProjectSettings.globalize_path("res://"), "agents",
+			"--install" if on else "--remove"]
+	var out: Array = []
+	var ec = OS.execute(python_cmd, args, out, true)
+	if ec == 0:
+		status_label.text = t("agents_on") if on else t("agents_off")
+	else:
+		agent_teach.set_block_signals(true)
+		agent_teach.button_pressed = _agents_installed()
+		agent_teach.set_block_signals(false)
+		status_label.text = t("agents_fail") + " " + (str(ec) + " " + " ".join(out) if out else str(ec))

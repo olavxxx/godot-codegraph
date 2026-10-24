@@ -146,6 +146,23 @@ CodeGraph writes its index (`graph.db`, `bench.json`, `symbols.json`, `progress.
 
 Nothing in `.codegraph/` is meant to be committed, and the plugin never touches your source files.
 
+### Step 3 — teach your AI agent about it (one command, optional)
+
+A plugin is invisible to an AI agent working in the repo. One command fixes that:
+
+```powershell
+python addons/codegraph/backend/graph.py agents                # what is installed?
+python addons/codegraph/backend/graph.py agents --install      # write the block
+python addons/codegraph/backend/graph.py agents --install --tools claude,copilot,cursor
+python addons/codegraph/backend/graph.py agents --remove       # undo
+```
+
+It writes a block delimited by `<!-- BEGIN CODEGRAPH -->` / `<!-- END CODEGRAPH -->` into your **`AGENTS.md`** (created if missing), telling agents to use `kg` before grep — with *your* project's own numbers (files, functions, signals, autoloads) and the exact command lines. `--tools` adds pointer files for tools that do not read `AGENTS.md`: `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/codegraph.mdc`.
+
+Guarantees: everything is inside the markers, so your own text is never touched; a file you already wrote is skipped, not overwritten; re-running only updates the block; `--remove` takes it all out again (and deletes pointer files that contained nothing else). These files are meant to be committed.
+
+No terminal needed: tick **“Teach my AI agents about CodeGraph”** on the plugin's welcome card. While nothing is installed, `kg status` prints a one-line hint about the command.
+
 ---
 
 ## 📜 License & Credits
