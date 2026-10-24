@@ -1540,7 +1540,10 @@ def agents_block(root: Path) -> str:
         "",
         "CRITICAL WORKFLOW RULE FOR AI AGENTS:",
         "Do NOT use `grep_search` across the codebase or read entire `.gd` files into context.",
-        f"ALWAYS query `{kg}/kg.bat` (or `./{kg}/kg` on Linux/macOS) first for symbol lookup, class outlines, callers, signals, and dependencies.",
+        f"ALWAYS query `{kg}/kg.bat` (or `./{kg}/kg` on Linux/macOS) first for symbol lookup, class"
+        f"outlines, callers, signals, rpc handlers and dependencies. The graph in `.codegraph/graph.db`"
+        "is **always current** — never run an `index` command first. `kg status` prints live counts"
+        "and which folders are in scope (some are out by default).",
         "",
         "### Intent -> Command Cheat Sheet:",
         "```",
@@ -1567,6 +1570,13 @@ def _wrap(text: str) -> str:
     """Peikefil: berre blokkmerke + to linjer, så --remove kan kjenne att fila som vår."""
     return (AGENTS_BEGIN + "\n# AI agents: DO NOT grep or read full files. Read `AGENTS.md` in this folder first —\n"
             "# it documents the CodeGraph indexer (`kg.bat`) which you MUST query before any file inspection.\n" + AGENTS_END + "\n")
+
+
+def _inner(txt: str) -> str:
+    """Innhaldet mellom merka (inkl. startmerket) - for å sjå om brukaren har redigert det."""
+    if not _has_block(txt):
+        return ""
+    return txt[txt.index(AGENTS_BEGIN):txt.index(AGENTS_END)]
 
 
 def _has_block(txt: str) -> bool:
@@ -1599,7 +1609,7 @@ def _drop_block(txt: str) -> str:
     return out if out.strip() else ""
 
 
-def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) -> int:
+def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None, force: bool = False) -> int:
     """Skriv/les agentinstruksjonar i prosjektróta. Alt ligg inne i merka blokker."""
     targets = agents_targets(tools)
     paths = ["AGENTS.md"] + [POINTER_TARGETS[t] for t in targets if t != "agents"]
@@ -1626,6 +1636,10 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) 
             p = root / rel
             if rel == "AGENTS.md":
                 txt, eol, bom = _read_keep(p) if p.exists() else ("", "\n", "")
+                # Blokk som er redigert for hand, blir verna utan --force.
+                if _has_block(txt) and not force and _inner(txt) != _inner(block):
+                    print(f"  {rel}: blokken er redigert for hand - bruk --force for å skrive over")
+                    continue
                 p.parent.mkdir(parents=True, exist_ok=True)
                 _write_keep(p, _splice_block(txt, block), eol, bom)
             else:
@@ -1634,6 +1648,9 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) 
                     if not _has_block(txt):
                         print(f"  hoppar over {rel}: brukaren har allereie ei anna fil der")
                         continue
+                    # peikefiler har ingen prosjektspecifik data - skrivast berre éin gong
+                    print(f"  {rel}: allereie installert (rør ikkje)")
+                    continue
                 else:
                     eol, bom = ("\r\n" if os.name == "nt" else "\n"), ""
                 p.parent.mkdir(parents=True, exist_ok=True)
@@ -2011,6 +2028,7 @@ def main() -> int:
     q.add_argument("--install", action="store_true", help="installer eller oppdater blokkene")
     q.add_argument("--remove", action="store_true", help="ta blokkene vekk att")
     q.add_argument("--tools", help="peikefilar for verktøy som ikkje les AGENTS.md: claude,copilot,cursor")
+    q.add_argument("--force", action="store_true", help="skriv over blokka sjølv om ho er redigert for hand")
     q = add_lim(sub.add_parser("find"), 40)
     q.add_argument("name")
     q = add_lim(sub.add_parser("outline"))
@@ -2069,7 +2087,7 @@ def main() -> int:
         if a.cmd == "symbols":
             return cmd_symbols(con, L(a))
         if a.cmd == "agents":
-            return cmd_agents(con, root, a.install, a.remove, a.tools)
+            return cmd_agents(con, root, a.install, a.remove, a.tools, a.force)
         if a.cmd == "find":
             return cmd_find(con, a.name, L(a))
         if a.cmd == "outline":
