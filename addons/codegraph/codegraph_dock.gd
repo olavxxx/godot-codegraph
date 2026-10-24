@@ -579,6 +579,11 @@ func _connect_fs_watch() -> void:
 		rfs.filesystem_changed.connect(_on_filesystem_changed)
 
 func _on_filesystem_changed() -> void:
+	# Editoren har nettopp skanna disken på nytt - da kan plugin.cfg ha blitt ei
+	# anna fil (ein oppdatering, en git checkout, ei handredigering).  Talet i
+	# faktatabellen og i About skal følgje etter, elles står det gammalt heilt til
+	# ein omstart.  Dette står føre python-vakten, som ikkje har med saka å gjere.
+	_refresh_version_labels()
 	if not python_ok:
 		return
 	if auto_timer == null:
