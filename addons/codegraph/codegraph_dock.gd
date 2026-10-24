@@ -2179,7 +2179,11 @@ func _on_search_text_changed(new_text: String) -> void:
 # X-knappen (eller backspace heilt ut) skal ta med svaret som står att. Utan dette
 # blir det ståande eit svar frå før, og brukaren trudar det er svaret på det tomme feltet.
 func _reset_search_results() -> void:
-	if not is_instance_valid(output_display) or output_display.text.is_empty():
+	if not is_instance_valid(output_display):
+		return
+	# Svaret blir lagt til med append_text(), og då er .text framleis tom - det er
+	# get_parsed_text() som held på det som faktisk står på skjermen.
+	if output_display.get_parsed_text().is_empty():
 		return
 	output_display.clear()
 	status_label.text = t("enter_term")
