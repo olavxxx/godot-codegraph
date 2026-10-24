@@ -10,6 +10,20 @@ It bridges what standard text searches (grep) and built-in editor tools miss: **
 
 Available both as a **Godot Editor Plugin (Bottom Panel Dock)** and as an ultra-fast **CLI (`kg`)** engineered for human developers and AI coding agents.
 
+## 📸 What it looks like
+
+<table>
+  <tr>
+    <td><img src="screenshots/symbol-search.png" width="430" alt="Symbol search in the editor dock"></td>
+    <td><img src="screenshots/benchmark-charts.png" width="300" alt="Benchmark charts: tokens and milliseconds for eight real queries"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="screenshots/web-graph-files.png" width="700" alt="Interactive web graph of a whole game project: 845 nodes, 5092 edges"></td>
+  </tr>
+</table>
+
+The pictures live in `screenshots/` (512 px copies in `screenshots/thumbnails/`), and the icon PNGs the Asset Library wants are in `assetlib/`. Both folders hold an empty `.gdignore`, so Godot never imports them, and `.gitattributes` keeps them out of the zip people download when they install or update the plugin.
+
 ---
 
 ## ⚡ What Makes CodeGraph Different?

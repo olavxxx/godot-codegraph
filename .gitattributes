@@ -1,0 +1,6 @@
+# The gallery is for the GitHub page and the Asset Library preview links. GitHub
+# leaves export-ignore paths out of the archives it builds for a tag, so nobody
+# downloading the plugin (or running kg update, which reads that same archive)
+# has to carry ~3 MB of pictures along with the addon.
+screenshots/** export-ignore
+assetlib/** export-ignore
