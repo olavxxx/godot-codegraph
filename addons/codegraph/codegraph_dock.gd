@@ -507,7 +507,9 @@ const CHECK_TTL_H = 20.0     # editoren startar ofte - éin nettverkssjekk per d
 const GITIGNORE_WANTED = [".codegraph/"]
 const GITIGNORE_PATH = "res://.gitignore"
 const AGENTS_TAB = 3           # fanebladet for Agentar & Info (fast rekkjefølgje)
-const GITIGNORE_HEADER = "\n# CodeGraph: lokal index og cache (ikkje ta med i git)\n"
+# Kommenteaten vi skriv inn i brukaren sin .gitignore. Alltid engelsk: fila
+# hamnar i repoet deira, der alle (og alle agentar) les henne.
+const GITIGNORE_HEADER = "# CodeGraph: local index and cache (keep out of git)"
 
 var python_ver: String = ""      # t.d. "3.12.1" - frå Python sjølv, ikkje frå --version-teksten
 var python_exe: String = ""      # sys.executable: det faktiske programmet bak kommandoen
@@ -980,6 +982,15 @@ func _refresh_gitignore_row() -> void:
 # Éin trykk-knapp, berre leggje til: meir enn å skrive på slutten av fila gjer
 # vi ikkje, og vi spør berre når noko faktisk manglar.
 func _on_giti_fix_pressed() -> void:
+	# Les fila på nytt FIRST: brukaren kan ha adda regelen for hand mellom
+	# raden dukka opp og klikket, og då skal vi ikkje skrive eitt einaste teikn.
+	_check_gitignore(true)
+	if gitignore_missing.is_empty():
+		giti_status.text = t("giti_noneed")
+		giti_status.add_theme_color_override("default_color", C_OK)
+		if giti_fix_row: giti_fix_row.visible = false
+		_refresh_tab_badge()
+		return
 	var exists: bool = FileAccess.file_exists(GITIGNORE_PATH)
 	var txt: String = ""
 	var eol: String = "\n"
@@ -992,7 +1003,7 @@ func _on_giti_fix_pressed() -> void:
 			eol = "\r\n"
 	if not txt.is_empty() and not txt.ends_with("\n"):
 		txt += eol
-	txt += eol + "# CodeGraph: lokal index og cache (skal ikkje i git)" + eol
+	txt += eol + GITIGNORE_HEADER + eol
 	for w in gitignore_missing:
 		txt += w + eol
 	var fw: FileAccess = FileAccess.open(GITIGNORE_PATH, FileAccess.WRITE)
