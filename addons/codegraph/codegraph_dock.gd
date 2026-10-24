@@ -1356,6 +1356,8 @@ func _on_update_poll() -> void:
 			upd_fail_note = t("upd_exit_code") % update_exit
 		else:
 			upd_fail_note = ""
+		# Faktaraden «Plugin» og About-teksten skal ikkje halde på den gamle versjonen.
+		_refresh_version_labels()
 	_refresh_update_card()
 
 func _on_upd_check_pressed() -> void:
@@ -2340,6 +2342,18 @@ func _plugin_version() -> String:
 	if cfg.load("res://addons/codegraph/plugin.cfg") != OK:
 		return ""
 	return str(cfg.get_value("plugin", "version", ""))
+
+# Versjonstalet i faktatabellen og i About-teksten blir sett når editoren startar.
+# Etter ein installasjon er fila på disken ei anna, så her må vi lese henne på
+# nytt - elles står det «1.1.4» medan pluginen på disken allereie er 1.1.5, heilt
+# til brukaren lastar prosjektet på nytt.
+func _refresh_version_labels() -> void:
+	var ver: String = _plugin_version()
+	if val_plugin:
+		val_plugin.text = ver
+		val_plugin.add_theme_color_override("font_color", C_INK)
+	if about_text:
+		about_text.text = t("about_text") % ver
 
 func _on_repo_pressed() -> void:
 	OS.shell_open(REPO_URL)

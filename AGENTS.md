@@ -38,7 +38,9 @@ fix forward.
 - After `kg update --apply` (and `--restore`), `.codegraph/update.json` must describe the
   addon **as it is on disk** (`current` re-read from `plugin.cfg`, `update_available`
   recomputed). The editor reads that file straight after the install; a stale `true` leaves
-  the update button armed and the user can install the same zip over and over.
+  the update button armed and the user can install the same zip over and over. The dock must
+  likewise re-read `plugin.cfg` for its own **Plugin** row and the About text after an
+  install — they are set once at editor start.
 - UI text exists in **both** `en` and `no` blocks in `codegraph_dock.gd` (STRINGS). Keep the
   key sets identical — no key in one language only. Norwegian is Nynorsk-flavoured Bokmål,
   matching the existing strings.
