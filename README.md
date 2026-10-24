@@ -203,9 +203,9 @@ To ship a release:
 
 ```powershell
 # 1. set the same number in addons/codegraph/plugin.cfg and version.json ("version" + "tag")
-# 2. commit and tag:
-git add -A
-git commit -m "release: 1.1.0"
+#    - that bump commit holds the version files and nothing else, so the zip matches it
+# 2. commit the fixes you are shipping, then tag the tip:
+git commit -am "release: 1.1.0"
 git tag v1.1.0
 git push origin main --tags
 ```

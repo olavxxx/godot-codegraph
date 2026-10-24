@@ -16,12 +16,11 @@ copy into their own Godot project, so **everything they see is user-facing text*
 ## Release = three numbers in step, then one tag
 
 `plugin.cfg version` == `version.json "version"` == `version.json "tag"` without the `v`.
-Then:
+Do that bump in its own commit (no other edits in it), then tag that commit:
 
 ```
-git add -A
-git commit -m "release: 1.1.0"
-git tag v1.1.0
+# commit the bump + the fixes it covers, then:
+git tag v1.1.1
 git push origin main --tags
 ```
 
