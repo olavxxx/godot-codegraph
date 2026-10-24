@@ -235,6 +235,7 @@ var poll_timer: Timer = null
 var html_thread: Thread = null
 var html_timer: Timer = null
 var html_view_name: String = ""
+var auto_timer: Timer = null
 
 func _ready() -> void:
 	_load_language_preference()
@@ -242,6 +243,44 @@ func _ready() -> void:
 	_init_python()
 	_check_indexed_state()
 	_load_existing_bench_chart()
+	_connect_fs_watch()
+
+# Editoren varslar når filer på disk endrar seg (lagring av skript, import,
+# agent-endringar). Då held vi indeksen frisk utan at brukaren må tenkje på det.
+func _connect_fs_watch() -> void:
+	if not Engine.is_editor_hint():
+		return
+	var rfs = EditorInterface.get_resource_filesystem()
+	if rfs and rfs.has_signal("filesystem_changed"):
+		rfs.filesystem_changed.connect(_on_filesystem_changed)
+
+func _on_filesystem_changed() -> void:
+	if not python_ok:
+		return
+	if auto_timer == null:
+		auto_timer = Timer.new()
+		auto_timer.one_shot = true
+		auto_timer.wait_time = 1.5
+		auto_timer.timeout.connect(_auto_index)
+		add_child(auto_timer)
+	auto_timer.start()
+
+# Inkrementell (IKKJE --force): bakenden hashar filene og tolkar berre endra
+# filar på nytt, og returnerer raskt når inga er endra. Berre når det allereie
+# finst ein indeks - ny prosjekt vel brukaren sjølv å bygge via velkomst-kortet.
+func _auto_index() -> void:
+	if not python_ok or not _index_ok():
+		return
+	if index_thread and index_thread.is_alive():
+		return
+	_start_async_index(["index"], false)
+
+# Docken kan ha vore skjult medan ein agent bygde indeksen via CLI - då skal
+# velkomst-kortet forsvinne og søket bli tilgjengeleg utan å starte editoren på nytt.
+func _visibility_changed() -> void:
+	if not is_node_ready() or not visible:
+		return
+	_check_indexed_state()
 
 func _load_language_preference() -> void:
 	# Sjekk lagret preferanse først
@@ -412,14 +451,20 @@ func _on_search_submitted(_text: String) -> void:
 	_on_search_pressed()
 
 func _check_indexed_state() -> void:
-	var db_path = ProjectSettings.globalize_path("res://.codegraph/graph.db")
-	if FileAccess.file_exists(db_path):
+	if _index_ok():
 		welcome_panel.visible = false
 		main_tabs.visible = true
 		_load_symbol_cache()
 	else:
 		welcome_panel.visible = true
 		main_tabs.visible = false
+
+# Ein 0-byte graph.db er attetter ein avbroten køyring, ikkje ein indeks.
+func _index_ok() -> bool:
+	var db = "res://.codegraph/graph.db"
+	if not FileAccess.file_exists(db):
+		return false
+	return FileAccess.get_size(db) > 1024
 
 func _on_mode_selected(idx: int) -> void:
 	var modes = ["find", "outline", "callers", "signal", "rpc", "impact", "deps", "status"]
