@@ -1529,41 +1529,43 @@ def _write_keep(p: Path, txt: str, eol: str = "\n", bom: str = "") -> None:
     p.write_bytes((bom.encode("utf-8") if bom else b"") + out.encode("utf-8"))
 
 
-def agents_block(con, root: Path) -> str:
-    """Instruksjonsblokk for agentar, med tala frå DEIRA eige prosjekt."""
-    n = dict(con.execute("SELECT kind, count(*) FROM nodes GROUP BY kind"))
-    fl = dict(con.execute("SELECT kind, count(*) FROM files GROUP BY kind"))
+def agents_block(root: Path) -> str:
+    """Instruksjonsblokk for agentar. Engelsk, fordi dei fleste repo og agentverktøy
+    er engelske. Utan prosjekttal: blokken blir committa og tala sluttar stemme -
+    `kg status` gir levande tal i staden."""
     kg = kg_rel(root)
-    tally = ", ".join(f"{v} {k}" for k, v in sorted(fl.items(), key=lambda kv: -kv[1]) if k != "file")
-    sym = ", ".join(f"{n.get(k, 0)} {k}" for k in ("fn", "class", "signal", "autoload", "group"))
     lines = [
         AGENTS_BEGIN,
-        "## CodeGraph — bruk denne før grep",
+        "## CodeGraph — use this before grep",
         "",
-        f"Dette prosjektet har CodeGraph: ein kodegraf over `.gd`/`.tscn`/`.tres`/`@rpc`/Autoloads "
-        f"i `.codegraph/graph.db`. Innhald: {tally or 'ingen filar enno'}; symbol: {sym}.",
+        "This project has CodeGraph: a code graph over `.gd` / `.tscn` / `.tres` / `@rpc` /",
+        "autoloads, stored in `.codegraph/graph.db`. The index refreshes itself, so it is",
+        "**always current** — never run an `index` command first. `kg status` prints live",
+        "counts (files, functions, signals, unresolved references) and the current file scope.",
         "",
-        "All kartlegging av kode startar her (IKKJE grep/les-runder). Indexen er sjølvoppdaterande — "
-        "**alltid** oppdatert, så det trengst aldri ein `index`-kommando først:",
+        "Start every code survey here, not with repeated grep/read loops:",
         "",
         "```",
-        f"{kg}/kg.bat status        # teljingar + uavklarte referansar (dette svaret = pluginen verkar)",
-        f"{kg}/kg.bat find NAMN     # class/fn/signal + fil:linje",
-        f"{kg}/kg.bat outline NAMN  # alle signal/felt/funcar med linjenummer (les ikke heile fila)",
-        f"{kg}/kg.bat callers NAMN  # gruppert per fil — få token",
-        f"{kg}/kg.bat signal NAMN   # erklæring + emitteringar + mottakarar (.gd OG .tscn)",
-        f"{kg}/kg.bat rpc           # alle @rpc-funksjonar med modus og kor mange stader dei blir kalla",
-        f"{kg}/kg.bat impact NAMN --depth 2   # kva ei endring kan røre = kva som bør testast",
-        f"{kg}/kg.bat md --scope ORDMOTT --budget 1200   # repo-kart pålagt eit token-budsjett",
+        f"{kg}/kg.bat status                  # counts + unresolved references (proof the tool works)",
+        f"{kg}/kg.bat find NAME                # class/fn/signal + file:line",
+        f"{kg}/kg.bat outline NAME             # every signal/field/function with line numbers —",
+        "                                      #   use this instead of reading a whole file",
+        f"{kg}/kg.bat callers NAME             # who calls it, grouped per file (few tokens)",
+        f"{kg}/kg.bat signal NAME              # declaration + emissions + receivers (.gd AND .tscn)",
+        f"{kg}/kg.bat rpc                      # every @rpc handler: its mode + number of call sites",
+        f"{kg}/kg.bat impact NAME --depth 2    # what a change can touch = what to test",
+        f"{kg}/kg.bat deps FILE --reverse      # what depends on / includes this file",
+        f"{kg}/kg.bat md --scope KEYWORD --budget 1200   # repo map inside a token budget",
         "```",
         "",
-        "`addons/` og `web/` er UT av indeksen som standard (`--addons` / `--web` tek dei med). "
-        "Alle oppslag skriv teljing + topp N (`--limit N`, `--all`). "
-        "På Linux/macOS: `./" + kg + "/kg` i staden for `kg.bat`.",
+        "Every query prints a count summary and the top N rows (`--limit N`, `--all`).",
+        "Some folders are out of the index by default — `kg status` shows the file scope, and",
+        "`--addons` / `--web` widen it (a scope change rebuilds the index).",
+        "On Linux/macOS use `./" + kg + "/kg` instead of `kg.bat`.",
         "",
-        "**Grafen er kandidatar, ikkje fasit.** Dynamisk Godot-kopling (`get_node(variabel_sti)`, "
-        "`%UniqueName`, grupper via streng, lambda-`connect`) løysast ikkje statisk — då bruk grep "
-        "+ `godot --headless --check-only` + ei faktisk køyring.",
+        "**The graph lists candidates, not proof.** Dynamic Godot wiring — `get_node()` with a",
+        "variable path, `%UniqueName`, groups referenced by string, lambdas in `connect()` — is",
+        "not resolved statically. For those: grep, `godot --headless --check-only`, and an actual run.",
         AGENTS_END,
     ]
     return "\n".join(lines) + "\n"
@@ -1627,7 +1629,7 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) 
         return 0
 
     if install:
-        block = agents_block(con, root)
+        block = agents_block(root)
         for rel in paths:
             p = root / rel
             if rel == "AGENTS.md":
