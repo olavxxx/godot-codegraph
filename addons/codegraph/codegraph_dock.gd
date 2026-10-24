@@ -893,52 +893,56 @@ func _gi_norm(rule: String) -> String:
 		r = r.substr(0, r.length() - 1)
 	return r.replace("\\", "/").to_lower()
 
-# Tidsstempel på fil: DirAccess::get_modified_time finst ikkje lenger i 4.x og
-# FileAccess har aldri hatt det, så vi spør berre dersom nokon av dei finst
-# (bygget kan Variants der metoden forsvinn). Utan tidsstempel brukar vi
-# tidsvindauget i _check_gitignore() åleine.
+# Tidsstempel på fil, om bygget har det. Godot 4.7 har ingen av desse metodane
+# i det heile (verken FileAccess::get_modified_time eller DirAccess::get_mod_time),
+# så her får vi 0 - og _check_gitignore() brukar då tidsvindauget åleine.
+# Framtidige bygget kan få metoden tilbake, og då slår tidsstemplet inn med ein
+# gong. 0 er trygt: utan tidsstempel gjeld «same exists-tilstand innanfor
+# tidsvindauget», og ei nyoppretta .gitignore gir annan exists-tilstand.
 func _file_mtime(path: String) -> int:
 	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return 0
-	# FileAccess::get_modified_time(path) finst på 4.x. I eit framtidig bygg
-	# utan denne metoden seier vi 0 (= utilgjengeleg), og då brukar vi
-	# tidsvindauget i _check_gitignore() aleine.
-	if not f.has_method("get_modified_time"):
-		f.close()
-		return 0
-	var stamp: Variant = f.call("get_modified_time", path)   # type-checka under
-	if typeof(stamp) == TYPE_INT and int(stamp) > 0:
-		f.close()
-		return int(stamp)   # FileAccess::get_modified_time(path) -> unix-tal
+	for method in ["get_modified_time", "get_mod_time"]:
+		if f.has_method(method):
+			var stamp: Variant = f.call(method, ProjectSettings.globalize_path(path))
+			if typeof(stamp) == TYPE_INT and int(stamp) > 0:
+				f.close()
+				return int(stamp)   # unix-tal, beint samanliknbar
 	f.close()
 	return 0
 
 func _check_gitignore(force: bool = false) -> void:
 	var now_ms: int = Time.get_ticks_msec()
 	var exists: bool = FileAccess.file_exists(GITIGNORE_PATH)
-	var mtime: int = _file_mtime(GITIGNORE_PATH)   # 0 når tidsstempel ikkje finst
-	# 1) same fil og same tidsstempel → svaret frå sist held framleis.
-	#    mtime = 0 tyder at tidsstempel ikkje finst i dette bygget: då gjeld
-	#    tidsvindauget under aleine, og fila blir lesen på nytt etter 3 sekund.
-	if not force and mtime > 0 and mtime == _gi_mtime \
-			and _gi_exists_state == (1 if exists else 2):
-		gitignore_missing = _gi_cached
-		return
-	# 2) elles: les høgst éin gong per tre sekund
-	if not force and _gi_status_time_ms > 0 and now_ms - _gi_status_time_ms < 3000:
-		gitignore_missing = _gi_cached
-		return
+	# Tidsstemplet blir lesen ETTER at fila er lesen, elles kan ei rask
+	# redigering havne i mellomrommet mellom tida vi måler og innhaldet vi les.
+	var mtime: int = 0
 	var out: Array[String] = []
+	var fa: FileAccess = null
+	if exists:
+		fa = FileAccess.open(GITIGNORE_PATH, FileAccess.READ)
+	var txt: String = ""
+	if fa != null:
+		txt = fa.get_as_text()
+		fa.close()
+		mtime = _file_mtime(GITIGNORE_PATH)   # 0 når tidsstempel ikkje finst
+	var state: int = 1 if exists else 2
+	# mtime endrar seg kvar gong fila blir skriven (Godot 4.7 har elles ikkje
+	# FileAccess::get_modified_time, og då er mtime 0 fast - unntaket er ei heilt
+	# ny fil, og det tar tidsvindauget under seg av).
+	var known_change: bool = state != _gi_exists_state or mtime != _gi_mtime
+	if not force:
+		if mtime > 0 and state == _gi_exists_state and mtime == _gi_mtime:
+			gitignore_missing = _gi_cached   # uendra fil: svaret held framleis
+			return
+		if not known_change and _gi_status_time_ms > 0 and now_ms - _gi_status_time_ms < 3000:
+			gitignore_missing = _gi_cached   # utan tidsstempel: høgst éin les per 3 s
+			return
 	if not exists:
 		for w in GITIGNORE_WANTED:
 			out.append(w)
 	else:
-		var fa: FileAccess = FileAccess.open(GITIGNORE_PATH, FileAccess.READ)
-		var txt: String = ""
-		if fa != null:
-			txt = fa.get_as_text()
-			fa.close()
 		var rules: PackedStringArray = txt.split("\n")
 		for w in GITIGNORE_WANTED:
 			var want: String = _gi_norm(w)
@@ -952,7 +956,7 @@ func _check_gitignore(force: bool = false) -> void:
 	_gi_cached = out
 	_gi_status_time_ms = now_ms
 	_gi_mtime = mtime
-	_gi_exists_state = 1 if exists else 2
+	_gi_exists_state = state
 	gitignore_missing = out
 
 func _refresh_gitignore_row() -> void:
@@ -1006,7 +1010,11 @@ func _on_giti_fix_pressed() -> void:
 		giti_status.add_theme_color_override("default_color", C_OK)
 		if giti_fix_row: giti_fix_row.visible = false
 	else:
+		# Should not happen (the button only shows when something is missing), but
+		# say so instead of pretending the file was just written.
 		giti_status.text = t("giti_noneed")
+		if giti_fix_row: giti_fix_row.visible = false
+		giti_status.add_theme_color_override("default_color", C_OK)
 	_refresh_tab_badge()
 
 # ---------------------------------------------------------------------------
