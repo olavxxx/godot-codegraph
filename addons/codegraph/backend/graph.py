@@ -2328,7 +2328,7 @@ def cmd_update(root: Path, do_apply: bool = False, restore: bool = False,
             age_h = (time.time() - float(state["checked_at"])) / 3600.0
         except Exception:
             age_h = 0.0
-    cached = bool(state) and not force and age_h < CHECK_TTL_H
+    cached = bool(state) and not force and age_h < CHECK_TTL_H and bool(state.get("asked_net"))
     if not cached:
         rel = remote_release()
         state = {
@@ -2336,6 +2336,9 @@ def cmd_update(root: Path, do_apply: bool = False, restore: bool = False,
             "checked_at_iso": time.strftime("%Y-%m-%d %H:%M", time.localtime()),
             "latest": rel["version"], "tag": rel["tag"], "notes": rel["notes"],
             "source": rel["source"], "http": rel["http"],
+            # skilnadar «spørde nettverket» frå «berre las svaret frå før» -
+            # elles ville kvar cache-treff forny TTL-en for alltid
+            "asked_net": True,
             "update_available": bool(rel["version"]) and ver_key(rel["version"]) > ver_key(cur),
             "reason": rel.get("reason", "") if not rel["version"] else "",
             "error": "" if rel["version"] else (

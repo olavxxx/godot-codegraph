@@ -26,9 +26,13 @@ git push origin main --tags
 ```
 
 Users get the amber chip within a minute; no GitHub Release is needed (GitHub's own
-`archive/refs/tags/v1.1.0.zip` is what the updater installs). `README.md` →
-"Staying up to date" documents the whole flow; keep that section correct when the
-mechanism changes. Broken release: delete the tag, bump a patch number, fix forward.
+`archive/refs/tags/v1.1.0.zip` is what the updater installs). Ship each commit as its own
+tag — an update never rewrites files outside `addons/codegraph/`, but it does rewrite the
+agent block in a project's `AGENTS.md`/`CLAUDE.md` when that block still matches what we
+generated, so a tag that mixes features with unrelated rewrites pushes those rewrites to
+every user. `README.md` → "Staying up to date" documents the whole flow; keep that section
+correct when the mechanism changes. Broken release: delete the tag, bump a patch number,
+fix forward.
 
 ## Rules for changes here
 
