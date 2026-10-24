@@ -1,7 +1,7 @@
 {
-  "version": "1.1.8",
-  "tag": "v1.1.8",
+  "version": "1.1.9",
+  "tag": "v1.1.9",
   "notes": "https://github.com/olavxxx/godot-codegraph/releases",
   "updated": "2026-10-24",
-  "_note": "The version CodeGraph ships. Update it when you tag a release: set version and tag (v1.1.7) to the same number, and the GitHub archive zip is found automatically. `kg update` reads this file; without it the newest tag is used."
+  "_note": "The version CodeGraph ships. Update it when you tag a release: set version and tag (v1.1.9) to the same number, and the GitHub archive zip is found automatically. `kg update` reads this file; without it the newest tag is used."
 }
