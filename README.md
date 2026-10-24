@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-yellow.svg?logo=python)](https://python.org)
 
-**CodeGraph** is a high-performance architecture indexer, code knowledge graph, and symbol navigator tailored specifically for **Godot 4**.
+**Godot CodeGraph** is a high-performance architecture indexer, code knowledge graph, and symbol navigator tailored specifically for **Godot 4**.
 
 It bridges what standard text searches (grep) and built-in editor tools miss: **`.tscn` scene signal wires**, **`@rpc` multiplayer topologies**, **Autoload dependencies**, and **cross-script callers**.
 
