@@ -80,7 +80,10 @@ const STRINGS = {
 		"welcome_title": "Welcome to CodeGraph",
 		"welcome_desc": "Your project has not been indexed yet. Initial indexing takes only a few seconds and enables instant symbol navigation, scene signal wires, and @rpc mapping.",
 		"btn_index_now": "⚡ Build Initial Index",
-		"agent_teach": "Teach my AI agents about CodeGraph (writes a marked block into AGENTS.md)",
+		"agent_teach": "Teach my AI agents about CodeGraph",
+		"agent_teach_short": "Teach agents",
+		"agent_teach_tip": "Writes or updates a marked CodeGraph block in AGENTS.md so AI agents in this repo use kg instead of repeated grep. Never touches text outside the markers. Undo: kg agents --remove",
+		"btn_teach_installed": "✓ Agent instructions installed — click to refresh",
 		"agents_on": "Agent instructions written to AGENTS.md — commit that file.",
 		"agents_off": "Agent instructions removed from AGENTS.md.",
 		"agents_fail": "Could not update the agent instructions:",
@@ -150,7 +153,10 @@ const STRINGS = {
 		"welcome_title": "Velkommen til CodeGraph",
 		"welcome_desc": "Dette prosjektet er ikke indeksert ennå. Første indeksering tar bare noen sekunder og gir deg lynrask kode- og signalnavigasjon.",
 		"btn_index_now": "⚡ Bygg indeks nå",
-		"agent_teach": "Lær AI-agentane mine om CodeGraph (skriv ein merkt blokk i AGENTS.md)",
+		"agent_teach": "Lær AI-agentane mine om CodeGraph",
+		"agent_teach_short": "Lær agentar",
+		"agent_teach_tip": "Skriver eller oppdaterar ein merkt CodeGraph-blokk i AGENTS.md, slik at AI-agentar i prosjektet brukar kg i staden for gjentekne grep. Rører aldri tekst utanfor merka. Angre: kg agents --remove",
+		"btn_teach_installed": "✓ Agentinstruksjonar installert — klikk for å oppdatere",
 		"agents_on": "Agentinstruksjonar skrivne i AGENTS.md — committ fila.",
 		"agents_off": "Agentinstruksjonar fjerna frå AGENTS.md.",
 		"agents_fail": "Klarte ikkje å oppdatere agentinstruksjonane:",
@@ -192,6 +198,7 @@ var lang: String = "en"
 @onready var welcome_progress: ProgressBar = %WelcomeProgress
 @onready var welcome_status: Label = %WelcomeStatus
 @onready var agent_teach: CheckButton = %AgentTeach
+@onready var teach_agents_button: Button = %TeachAgentsButton
 
 # Søkefane
 @onready var search_input: LineEdit = %SearchInput
@@ -342,7 +349,7 @@ func _init_python() -> void:
 # Slår av alt som krev backenden, så brukaren får ei forklaring i staden for feil.
 func _set_backend_enabled(on: bool) -> void:
 	for b in [index_now_button, search_button, reindex_button, bench_button, html_button,
-			open_files_button, open_signals_button, open_ego_button]:
+			open_files_button, open_signals_button, open_ego_button, teach_agents_button]:
 		if b:
 			b.disabled = not on
 	if agent_teach:
@@ -408,12 +415,18 @@ func _setup_ui() -> void:
 	welcome_progress.visible = false
 	welcome_status.visible = false
 	# Agentopplæring: tilstanden blir lest frå disken, ikkje hugsa i minnet.
-	agent_teach.text = t("agent_teach")
+	agent_teach.text = t("agent_teach_short")
+	agent_teach.tooltip_text = t("agent_teach_tip")
 	agent_teach.set_block_signals(true)
 	agent_teach.button_pressed = _agents_installed()
 	agent_teach.set_block_signals(false)
 	if not agent_teach.toggled.is_connected(_on_agent_teach):
 		agent_teach.toggled.connect(_on_agent_teach)
+	# Velkomst-kortet har same handling som knappen i verktøylinja: fanene
+	# (og dermed verktøylinja) er skjulte før prosjektet er indeksert.
+	_teach_button_text()
+	if not teach_agents_button.pressed.is_connected(_on_teach_pressed):
+		teach_agents_button.pressed.connect(_on_teach_pressed)
 	search_progress.visible = false
 	bench_progress.visible = false
 	
@@ -965,9 +978,11 @@ func _agents_installed() -> bool:
 		return false
 	return "BEGIN CODEGRAPH" in FileAccess.get_file_as_string("res://AGENTS.md")
 
-func _on_agent_teach(on: bool) -> void:
-	if not python_ok:
-		return
+func _teach_button_text() -> void:
+	if teach_agents_button:
+		teach_agents_button.text = t("btn_teach_installed") if _agents_installed() else t("agent_teach")
+
+func _teach_agents(on: bool) -> bool:
 	var args = [backend_path, "--path", ProjectSettings.globalize_path("res://"), "agents",
 			"--install" if on else "--remove"]
 	var out: Array = []
@@ -975,7 +990,18 @@ func _on_agent_teach(on: bool) -> void:
 	if ec == 0:
 		status_label.text = t("agents_on") if on else t("agents_off")
 	else:
+		status_label.text = t("agents_fail") + " " + str(ec) + (" " + " ".join(out) if out else "")
+	_teach_button_text()
+	return ec == 0
+
+func _on_agent_teach(on: bool) -> void:
+	if not python_ok:
+		return
+	if not _teach_agents(on):
 		agent_teach.set_block_signals(true)
 		agent_teach.button_pressed = _agents_installed()
 		agent_teach.set_block_signals(false)
-		status_label.text = t("agents_fail") + " " + (str(ec) + " " + " ".join(out) if out else str(ec))
+
+func _on_teach_pressed() -> void:
+	if python_ok:
+		_teach_agents(true)

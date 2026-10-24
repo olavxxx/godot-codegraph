@@ -42,6 +42,7 @@ DB_DIR = ".codegraph"
 # Addonen ligg éitt steg opp for backend-mappa, så då er det heile addonet
 # som skal halde seg ute av grafen — elles trugar fixture-filene til
 # sjølve spelet i søk og autocomplete når brukaren slår på --addons.
+BACKEND_DIR = Path(__file__).resolve().parent
 TOOL_DIR = Path(__file__).resolve().parent
 if TOOL_DIR.name == "backend":
     TOOL_DIR = TOOL_DIR.parent
@@ -1479,7 +1480,7 @@ def cmd_status(con, root: Path) -> int:
     print("kanter: " + "  ".join(f"{k}={v}" for k, v in sorted(e.items(), key=lambda kv: -kv[1])))
     print(f"uavklart: {un}")
     agents_f = root / "AGENTS.md"
-    if not agents_f.exists() or not _has_block(agents_f.read_text(encoding="utf-8", errors="replace")):
+    if not agents_f.exists() or not _has_block(_read_keep(agents_f)[0]):
         print("tips:   kg agents --install   # gjer AI-agentane i prosjektet kjende med dette verktøyet")
     return 0
 
@@ -1507,9 +1508,25 @@ def agents_targets(tools: str | None) -> list[str]:
 def kg_rel(root: Path) -> str:
     """Verktøyet sin sti relativt til prosjektróta (alltid / )."""
     try:
-        return TOOL_DIR.relative_to(root).as_posix()
+        return BACKEND_DIR.relative_to(root).as_posix()
     except ValueError:
         return "addons/codegraph/backend"
+
+
+def _read_keep(p: Path) -> tuple[str, str, str]:
+    """Les som (tekst med \\n, linjeskiftstil, BOM). Skilnaden på LF og CRLF må
+    followe med att, elles ser ein `git diff` 389 endra linjer i ei uendra fil."""
+    data = p.read_bytes()
+    bom = "\ufeff" if data.startswith(b"\xef\xbb\xbf") else ""
+    eol = "\r\n" if b"\r\n" in data else "\n"
+    txt = data.decode("utf-8-sig", errors="replace").replace("\r\n", "\n")
+    return txt, eol, bom
+
+
+def _write_keep(p: Path, txt: str, eol: str = "\n", bom: str = "") -> None:
+    """Skriv byte for byte med same linjeskiftstil som opphavet."""
+    out = txt.replace("\n", "\r\n") if eol == "\r\n" else txt
+    p.write_bytes((bom.encode("utf-8") if bom else b"") + out.encode("utf-8"))
 
 
 def agents_block(con, root: Path) -> str:
@@ -1573,12 +1590,19 @@ def _splice_block(txt: str, block: str) -> str:
 
 
 def _drop_block(txt: str) -> str:
+    """Fjern blokken utan å røre resten. `--install` la nøyaktig éin tom linje før
+    merket og éitt linjeskift etter sluttmerket - berre det takast, slik at
+    install + remove gir byte-identisk fil att."""
     if not _has_block(txt):
         return txt
     a = txt.index(AGENTS_BEGIN)
     b = txt.index(AGENTS_END) + len(AGENTS_END)
-    out = (txt[:a] + txt[b:]).strip("\n")
-    return out + "\n" if out else ""
+    if b < len(txt) and txt[b] == "\n":
+        b += 1
+    if txt[:a].endswith("\n\n"):
+        a -= 1
+    out = txt[:a] + txt[b:]
+    return out if out.strip() else ""
 
 
 def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) -> int:
@@ -1592,13 +1616,13 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) 
             p = root / rel
             if not p.exists():
                 continue
-            txt = p.read_text(encoding="utf-8", errors="replace")
+            txt, eol, bom = _read_keep(p)
             if _has_block(txt) and _drop_block(txt).strip() == "":
                 # Heile fila var berre vårt eget tjuvstart-avtrykk.
                 p.unlink()
                 print(f"  sletta {rel} (var berre CodeGraph-blokken)")
             elif _has_block(txt):
-                p.write_text(_drop_block(txt), encoding="utf-8")
+                _write_keep(p, _drop_block(txt), eol, bom)
                 print(f"  tok ut CodeGraph-blokken frå {rel}")
         return 0
 
@@ -1607,22 +1631,26 @@ def cmd_agents(con, root: Path, install: bool, remove: bool, tools: str | None) 
         for rel in paths:
             p = root / rel
             if rel == "AGENTS.md":
-                txt = p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
+                txt, eol, bom = _read_keep(p) if p.exists() else ("", "\n", "")
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(_splice_block(txt, block), encoding="utf-8")
+                _write_keep(p, _splice_block(txt, block), eol, bom)
             else:
-                if p.exists() and not _has_block(p.read_text(encoding="utf-8", errors="replace")):
-                    print(f"  hoppar over {rel}: brukaren har allereie ei anna fil der")
-                    continue
+                if p.exists():
+                    txt, eol, bom = _read_keep(p)
+                    if not _has_block(txt):
+                        print(f"  hoppar over {rel}: brukaren har allereie ei anna fil der")
+                        continue
+                else:
+                    eol, bom = ("\r\n" if os.name == "nt" else "\n"), ""
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_text(_wrap(""), encoding="utf-8")
+                _write_keep(p, _wrap(""), eol, bom)
             print(f"  skreiv {rel}")
         print("Desse filane er ment å committast. Angre: kg agents --remove")
         return 0
 
     # status (default)
     alle = ["AGENTS.md"] + list(POINTER_TARGETS.values())
-    funnen = [rel for rel in alle if (root / rel).exists() and _has_block((root / rel).read_text(encoding="utf-8", errors="replace"))]
+    funnen = [rel for rel in alle if (root / rel).exists() and _has_block(_read_keep(root / rel)[0])]
     print("agentinstruksjonar: " + ("installert (" + ", ".join(finnen) + ")" if funnen else "ikkje installert"))
     if not funnen:
         print("  kg agents --install          # AGENTS.md")
