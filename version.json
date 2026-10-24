@@ -3,5 +3,5 @@
   "tag": "v1.1.2",
   "notes": "https://github.com/olavxxx/godot-codegraph/releases",
   "updated": "2026-10-24",
-  "_for_kor": "versjonen CodeGraph gir ut. Oppdater når du tagger: sett version + tag (v1.1.0), så finn GitHub arkiv-zippen automatisk. `kg update` les denne fila; utan henne brukar den siste taggen."
+  "_for_kor": "versjonen CodeGraph gir ut. Oppdater når du tagger: sett version + tag (v1.1.2), så finn GitHub arkiv-zippen automatisk. `kg update` les denne fila; utan henne brukar den siste taggen.",
 }
